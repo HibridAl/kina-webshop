@@ -1,0 +1,80 @@
+interface ProductsPaginationProps {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  isLoading?: boolean;
+}
+
+export function ProductsPagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+  isLoading = false,
+}: ProductsPaginationProps) {
+  const pages = buildPages(currentPage, totalPages);
+
+  return (
+    <nav className="flex items-center justify-center gap-2" aria-label="Product pagination">
+      <button
+        type="button"
+        className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+        disabled={currentPage <= 1 || isLoading}
+        onClick={() => onPageChange(currentPage - 1)}
+      >
+        Previous
+      </button>
+      {pages.map((page, idx) =>
+        page === 'ellipsis' ? (
+          <span key={`ellipsis-${idx}`} className="px-2 text-sm text-muted-foreground">
+            …
+          </span>
+        ) : (
+          <button
+            key={page}
+            type="button"
+            className={`min-w-[2.25rem] rounded-md px-2 py-1 text-sm transition ${
+              page === currentPage
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-foreground hover:bg-muted/80'
+            }`}
+            disabled={isLoading}
+            onClick={() => onPageChange(page as number)}
+          >
+            {page}
+          </button>
+        )
+      )}
+      <button
+        type="button"
+        className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+        disabled={currentPage >= totalPages || isLoading}
+        onClick={() => onPageChange(currentPage + 1)}
+      >
+        Next
+      </button>
+    </nav>
+  );
+}
+
+function buildPages(current: number, total: number): Array<number | 'ellipsis'> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const pages: Array<number | 'ellipsis'> = [1];
+
+  if (current > 4) pages.push('ellipsis');
+
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  for (let i = start; i <= end; i += 1) {
+    pages.push(i);
+  }
+
+  if (current < total - 3) pages.push('ellipsis');
+
+  pages.push(total);
+
+  return pages;
+}
