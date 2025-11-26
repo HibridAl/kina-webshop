@@ -41,23 +41,35 @@ export default function ProductsPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 py-12 md:py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl font-bold mb-2">Products Catalog</h1>
-          <p className="text-muted-foreground mb-8">
-            Browse our complete catalog of automotive parts and accessories
-          </p>
+      <main className="flex-1">
+        <section className="relative overflow-hidden border-b border-border/60 bg-gradient-to-br from-background via-primary/5 to-accent/10 py-16">
+          <div className="absolute inset-0 bg-grid-soft opacity-20" aria-hidden />
+          <div className="relative mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8">
+            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Universal catalog</p>
+            <h1 className="mt-4 text-4xl font-semibold leading-tight md:text-5xl">Products Catalog</h1>
+            <p className="mx-auto mt-4 max-w-3xl text-base text-muted-foreground">
+              A single pane of glass for MG, BYD, Omoda, Geely, and Haval SKUs—with OEM crosswalks, inventory telemetry, and the guided vehicle selector baked in.
+            </p>
+          </div>
+        </section>
 
-          <div className="mb-8">
-            <Suspense fallback={<div>Loading vehicle selector...</div>}>
-              <VehicleSelector />
+        <section className="-mt-10 pb-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="rounded-[32px] border border-border/60 bg-card/90 p-6 shadow-2xl">
+              <Suspense fallback={<div>Loading vehicle selector...</div>}>
+                <VehicleSelector />
+              </Suspense>
+            </div>
+          </div>
+        </section>
+
+        <section className="pb-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <Suspense fallback={<div>Loading products...</div>}>
+              <ProductsPageClient />
             </Suspense>
           </div>
-
-          <Suspense fallback={<div>Loading products...</div>}>
-            <ProductsPageClient />
-          </Suspense>
-        </div>
+        </section>
       </main>
       <Footer />
     </div>

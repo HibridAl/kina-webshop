@@ -1,14 +1,34 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ShoppingCart, Search, Menu } from 'lucide-react';
+import { ShoppingCart, Search, Menu, Sparkles, ShieldCheck, Headphones, ChevronRight, X } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { OemSearchBar } from '@/components/oem-search-bar';
 import { useAuth } from '@/hooks/use-auth';
 import { getBrowserClient } from '@/lib/supabase';
+
+const navLinks = [
+  { href: '/products', label: 'Catalog', description: 'All categories & bundles' },
+  { href: '/brands', label: 'Brands', description: 'MG, BYD, Geely, Omoda' },
+  { href: '/vehicles', label: 'Vehicles', description: 'Compatibility library' },
+  { href: '/account', label: 'Account', description: 'Orders & saved builds' },
+];
+
+const announcement = {
+  message: 'New EU fulfillment hub now live – <48h ship for MG & BYD fleets.',
+  href: '/products',
+};
+
+const quickActions = [
+  { label: 'View EV fluids matrix', href: '/oil-selector' },
+  { label: 'Convert OEM → SKU', href: '/products?oem=' },
+  { label: 'Talk to sourcing', href: 'mailto:sourcing@autohub.com' },
+];
 
 export function Header() {
   const router = useRouter();
@@ -16,7 +36,7 @@ export function Header() {
   const searchParams = useSearchParams();
   const { user, profile, loading: authLoading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [signingOut, setSigningOut] = useState(false);
 
@@ -35,10 +55,26 @@ export function Header() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = searchQuery.trim();
-    if (trimmed.length === 0) return;
+    if (!trimmed) return;
     router.push(`/products?search=${encodeURIComponent(trimmed)}`);
-    setSearchOpen(false);
+    setCommandOpen(false);
   };
+
+  useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen((prev) => !prev);
+      }
+      if (event.key === 'Escape') {
+        setCommandOpen(false);
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, []);
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -58,195 +94,238 @@ export function Header() {
   const userInitial = (profile?.email ?? user?.email ?? 'A').charAt(0).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-accent-foreground font-bold">
-              A
-            </div>
-            <span className="text-xl font-bold text-primary hidden sm:inline">AutoHub</span>
+    <header className="sticky top-0 z-50 w-full">
+      <div className="bg-primary text-primary-foreground">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2 text-xs font-medium sm:px-6 lg:px-8">
+          <p className="text-balance">{announcement.message}</p>
+          <Link href={announcement.href} className="hidden items-center gap-1 text-[11px] uppercase tracking-wide sm:inline-flex">
+            Track fulfillment
+            <ChevronRight className="h-3 w-3" />
           </Link>
+        </div>
+      </div>
 
-          {/* Nav Links - Desktop */}
-          <nav className="hidden md:flex items-center gap-8">
-            <Link href="/brands" className="text-sm font-medium hover:text-accent transition-colors">
-              Brands
+      <div className="border-b border-border/60 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between gap-4">
+            <Link href="/" className="relative flex items-center gap-3">
+              <div className="glow-border relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/80 to-primary text-white font-bold">
+                AH
+              </div>
+              <div className="hidden flex-col text-sm font-semibold leading-tight text-foreground sm:flex">
+                <span>AutoHub</span>
+                <span className="text-xs font-normal text-muted-foreground">Precision parts cloud</span>
+              </div>
             </Link>
-            <Link href="/products" className="text-sm font-medium hover:text-accent transition-colors">
-              Products
-            </Link>
-            <Link href="/about" className="text-sm font-medium hover:text-accent transition-colors">
-              About
-            </Link>
-          </nav>
 
-          {/* Right Actions */}
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSearchOpen((prev) => !prev)}
-              aria-label="Search products"
-            >
-              <Search className="w-5 h-5" />
-            </Button>
+            <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="group flex flex-col gap-0.5 rounded-2xl border border-transparent px-4 py-2 text-sm transition hover:border-border/80 hover:bg-muted/40"
+                >
+                  <span className="font-medium group-hover:text-primary">{link.label}</span>
+                  <span className="text-[11px] text-muted-foreground">{link.description}</span>
+                </Link>
+              ))}
+            </nav>
 
-            <div className="hidden md:flex items-center gap-2">
-              {authLoading ? (
-                <div className="w-24 h-9 rounded-full bg-muted animate-pulse" />
-              ) : user ? (
-                <DropdownMenu.Root>
-                  <DropdownMenu.Trigger asChild>
-                    <button
-                      className="flex items-center gap-2 rounded-full border border-border px-2 py-1 text-sm hover:bg-muted"
-                      aria-label="Open account menu"
-                    >
-                      <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold">
-                        {userInitial}
-                      </span>
-                      <span className="text-left">
-                        <span className="block leading-tight text-xs text-muted-foreground">
-                          {profile?.role === 'admin' ? 'Admin' : 'Account'}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden rounded-full border-border/80 bg-background/70 text-sm text-muted-foreground shadow-sm hover:text-foreground md:inline-flex"
+                onClick={() => setCommandOpen(true)}
+              >
+                <Search className="h-4 w-4" />
+                Quick search
+                <span className="rounded-full bg-muted px-1.5 text-[10px] uppercase tracking-widest">⌘K</span>
+              </Button>
+
+              <Button variant="ghost" size="icon" asChild className="rounded-full border border-border/70">
+                <Link href="/cart" aria-label="Open cart">
+                  <ShoppingCart className="h-5 w-5" />
+                </Link>
+              </Button>
+
+              <div className="hidden md:flex items-center gap-2">
+                {authLoading ? (
+                  <div className="h-9 w-24 animate-pulse rounded-full bg-muted" />
+                ) : user ? (
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button className="flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-2 py-1 text-sm shadow-sm transition hover:border-border">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                          {userInitial}
                         </span>
-                        <span className="block leading-tight text-sm font-medium truncate max-w-[140px]">
-                          {profile?.email ?? user.email}
+                        <span className="hidden text-left leading-tight md:block">
+                          <span className="block text-xs text-muted-foreground">
+                            {profile?.role === 'admin' ? 'Admin' : 'Account'}
+                          </span>
+                          <span className="block max-w-[140px] truncate text-sm font-medium">
+                            {profile?.email ?? user.email}
+                          </span>
                         </span>
-                      </span>
-                    </button>
-                  </DropdownMenu.Trigger>
-                  <DropdownMenu.Content
-                    align="end"
-                    sideOffset={8}
-                    className="w-56 rounded-lg border border-border bg-popover shadow-lg p-2 text-sm"
-                  >
-                    <DropdownMenu.Label className="px-2 py-1 text-xs text-muted-foreground">
-                      Signed in as {user.email}
-                    </DropdownMenu.Label>
-                    <DropdownMenu.Item asChild className="px-2 py-2 rounded-md cursor-pointer hover:bg-muted">
-                      <Link href="/account">Account</Link>
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item asChild className="px-2 py-2 rounded-md cursor-pointer hover:bg-muted">
-                      <Link href="/account/orders">Orders</Link>
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item asChild className="px-2 py-2 rounded-md cursor-pointer hover:bg-muted">
-                      <Link href="/cart">Cart</Link>
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Separator className="my-1 h-px bg-border" />
-                    <DropdownMenu.Item
-                      className="px-2 py-2 rounded-md cursor-pointer hover:bg-destructive/10 text-destructive"
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        handleSignOut();
-                      }}
-                    >
-                      {signingOut ? 'Signing out...' : 'Sign out'}
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Root>
-              ) : (
-                <>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href={loginHref}>Sign in</Link>
-                  </Button>
-                  <Button size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground" asChild>
-                    <Link href={registerHref}>Sign up</Link>
-                  </Button>
-                </>
-              )}
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content align="end" sideOffset={8} className="w-60 rounded-2xl border border-border/60 bg-popover p-2 shadow-2xl">
+                      <DropdownMenu.Label className="px-2 py-1 text-xs text-muted-foreground">
+                        Signed in as {user.email}
+                      </DropdownMenu.Label>
+                      <DropdownMenu.Separator className="my-1 h-px bg-border/70" />
+                      <DropdownMenu.Item asChild className="cursor-pointer rounded-xl px-2 py-2 text-sm hover:bg-muted/60">
+                        <Link href="/account">Account</Link>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item asChild className="cursor-pointer rounded-xl px-2 py-2 text-sm hover:bg-muted/60">
+                        <Link href="/orders">Orders</Link>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item asChild className="cursor-pointer rounded-xl px-2 py-2 text-sm hover:bg-muted/60">
+                        <Link href="/cart">Cart</Link>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Separator className="my-1 h-px bg-border/70" />
+                      <DropdownMenu.Item
+                        className="cursor-pointer rounded-xl px-2 py-2 text-sm text-destructive hover:bg-destructive/10"
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          handleSignOut();
+                        }}
+                      >
+                        {signingOut ? 'Signing out…' : 'Sign out'}
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Root>
+                ) : (
+                  <div className="hidden items-center gap-2 md:flex">
+                    <Button variant="ghost" size="sm" className="text-sm" asChild>
+                      <Link href={loginHref}>Sign in</Link>
+                    </Button>
+                    <Button size="sm" className="rounded-full bg-primary text-primary-foreground" asChild>
+                      <Link href={registerHref}>Create account</Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="flex md:hidden"
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                aria-label="Toggle navigation"
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </Button>
             </div>
+          </div>
 
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/cart">
-                <ShoppingCart className="w-5 h-5" />
-              </Link>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
+          <div className="hidden gap-3 md:flex">
+            <Badge variant="accent" className="flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5" /> Fastest MG EV sourcing desk
+            </Badge>
+            <Badge variant="outline" className="flex items-center gap-2">
+              <ShieldCheck className="h-3.5 w-3.5" /> OEM verified catalog
+            </Badge>
+            <Badge variant="secondary" className="flex items-center gap-2">
+              <Headphones className="h-3.5 w-3.5" /> 24/7 fleet support
+            </Badge>
           </div>
         </div>
-
-        {/* Search Bar */}
-        {searchOpen && (
-          <div className="border-t border-border py-3 space-y-3">
-            <div className="flex items-center gap-3">
-              <form onSubmit={handleSearchSubmit} className="flex flex-1 items-center gap-3">
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search products or keywords"
-                  className="flex-1 px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                  autoFocus
-                />
-                <Button
-                  type="submit"
-                  size="sm"
-                  className="bg-accent hover:bg-accent/90 text-accent-foreground"
-                >
-                  Search
-                </Button>
-              </form>
-            </div>
-            <div className="flex items-center gap-3">
-              <OemSearchBar className="flex-1" />
-            </div>
-          </div>
-        )}
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden pb-4 border-t">
-            <nav className="flex flex-col gap-3 pt-4">
-              <Link href="/brands" className="text-sm font-medium hover:text-accent transition-colors">
-                Brands
-              </Link>
-              <Link href="/products" className="text-sm font-medium hover:text-accent transition-colors">
-                Products
-              </Link>
-              <Link href="/about" className="text-sm font-medium hover:text-accent transition-colors">
-                About
-              </Link>
-            </nav>
-            <div className="mt-4 flex flex-col gap-2">
-              {user ? (
-                <>
-                  <div className="text-xs text-muted-foreground">Signed in as {user.email}</div>
-                  <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
-                    <Link href="/account">Account</Link>
-                  </Button>
-                  <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
-                    <Link href="/account/orders">Orders</Link>
-                  </Button>
-                  <Button variant="destructive" onClick={handleSignOut} disabled={signingOut}>
-                    {signingOut ? 'Signing out...' : 'Sign out'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
-                    <Link href={loginHref}>Sign in</Link>
-                  </Button>
-                  <Button
-                    asChild
-                    className="bg-accent hover:bg-accent/90 text-accent-foreground"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Link href={registerHref}>Sign up</Link>
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </div>
+
+      {mobileMenuOpen && (
+        <div className="md:hidden border-b border-border/70 bg-background/95 px-4 pb-6 pt-4 shadow-lg">
+          <nav className="flex flex-col gap-3">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-2xl border border-border/70 px-4 py-3 text-sm font-medium hover:border-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <div>{link.label}</div>
+                <p className="text-xs text-muted-foreground">{link.description}</p>
+              </Link>
+            ))}
+          </nav>
+          <div className="mt-4 flex flex-col gap-2">
+            {user ? (
+              <>
+                <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href="/account">Account</Link>
+                </Button>
+                <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href="/orders">Orders</Link>
+                </Button>
+                <Button variant="destructive" onClick={handleSignOut} disabled={signingOut}>
+                  {signingOut ? 'Signing out…' : 'Sign out'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href={loginHref}>Sign in</Link>
+                </Button>
+                <Button className="bg-primary" asChild onClick={() => setMobileMenuOpen(false)}>
+                  <Link href={registerHref}>Create account</Link>
+                </Button>
+              </>
+            )}
+          </div>
+          <div className="mt-6 space-y-3 rounded-2xl border border-border/70 p-4 text-sm">
+            {quickActions.map((item) => (
+              <Link key={item.label} href={item.href} onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-between text-foreground">
+                {item.label}
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {commandOpen && (
+        <div className="fixed inset-0 z-40 flex items-start justify-center bg-background/80 px-4 py-10 backdrop-blur-lg" onClick={() => setCommandOpen(false)}>
+          <div
+            className="glass-panel relative w-full max-w-2xl rounded-3xl border border-border/70 bg-card/90 p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4">
+              <div>
+                <p className="text-sm font-semibold">Universal search</p>
+                <p className="text-xs text-muted-foreground">Instantly jump to products, OEM lookups, or vehicles.</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setCommandOpen(false)} aria-label="Close search overlay">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <form onSubmit={handleSearchSubmit} className="space-y-4">
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search products, SKUs, or vehicle keywords"
+                leadingIcon={<Search className="h-4 w-4" />}
+              />
+              <div className="rounded-2xl border border-dashed border-border/70 p-4">
+                <p className="text-xs uppercase text-muted-foreground">OEM or SKU search</p>
+                <OemSearchBar className="mt-3" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {quickActions.map((item) => (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="rounded-xl border border-border/60 p-3 text-sm transition hover:border-primary"
+                    onClick={() => setCommandOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

@@ -42,9 +42,11 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
   if (loading) return <Skeleton className="h-96" />;
   if (!product) return <div>Product not found</div>;
 
+  const heroImage = product.image_url || '/placeholder.svg?height=400&width=500&query=automotive part';
+
   const handleAddToCart = () => {
     if (!product) return;
-    addItem(product.id, product.name, product.price, quantity);
+    addItem(product.id, product.name, product.price, quantity, { imageUrl: heroImage });
   };
 
   return (
@@ -53,7 +55,7 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
             {/* Product Image */}
             <div className="flex items-center justify-center bg-muted rounded-lg h-96 md:h-full">
               <img
-                src={product.image_url || '/placeholder.svg?height=400&width=500&query=automotive part'}
+                src={heroImage}
                 alt={product.name}
                 className="w-full h-full object-cover rounded-lg"
               />

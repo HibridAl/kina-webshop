@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
 import { getBrands } from '@/lib/db';
 import type { Brand } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 
 const brandLogoMap: Record<string, string> = {
   MG: '/CarBrands/mg.png',
@@ -41,50 +43,83 @@ export function FeaturedBrands() {
   }, []);
 
   return (
-    <section className="py-16 md:py-24 bg-muted/30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-balance">Featured Brands</h2>
-          <p className="text-lg text-muted-foreground">
-            Explore parts and accessories for the top Chinese automotive brands
-          </p>
+    <section className="relative overflow-hidden py-20">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" aria-hidden />
+      <div className="absolute inset-0 bg-grid-soft opacity-30" aria-hidden />
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-6 pb-10 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-4">
+            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Trusted OEM partners</p>
+            <h2 className="text-3xl font-semibold leading-tight md:text-4xl">
+              Verified inventory direct from China’s flagship EV makers.
+            </h2>
+            <p className="text-muted-foreground md:w-3/4">
+              Every brand tile pipes into live Supabase tables with SKU provenance, sustainability metrics, and readiness notes per market.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <Badge variant="outline" className="rounded-full px-4 py-2">Carbon-neutral packaging</Badge>
+            <Badge className="rounded-full px-4 py-2">OEM docs attached</Badge>
+          </div>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-40 rounded-lg" />
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-48 rounded-3xl" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-            {brands.map((brand) => (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {brands.slice(0, 4).map((brand) => (
               <Link
                 key={brand.id}
                 href={`/brands/${brand.id}`}
-                className="group"
+                className="group rounded-[28px] border border-border/70 bg-card/70 p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
               >
-                <div className="relative overflow-hidden rounded-lg bg-card border border-border hover:border-accent transition-all h-40 flex flex-col items-center justify-center p-4">
+                <div className="mb-6 flex items-center justify-between">
                   {getBrandLogo(brand) ? (
                     <img
-                      src={getBrandLogo(brand) || "/placeholder.svg"}
+                      src={getBrandLogo(brand) || '/placeholder.svg'}
                       alt={brand.name}
-                      className="w-16 h-16 object-contain mb-3 group-hover:scale-110 transition-transform"
+                      className="h-10 w-10 object-contain"
                     />
                   ) : (
-                    <div className="w-16 h-16 bg-accent rounded-lg flex items-center justify-center mb-3 text-accent-foreground font-bold text-xl">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold">
                       {brand.name.substring(0, 2)}
                     </div>
                   )}
-                  <h3 className="font-semibold text-center group-hover:text-accent transition-colors">
-                    {brand.name}
-                  </h3>
-                  {brand.country && (
-                    <p className="text-xs text-muted-foreground mt-1">{brand.country}</p>
-                  )}
+                  <Badge variant="outline" className="rounded-full text-[11px]">
+                    {brand.country ?? 'Global'}
+                  </Badge>
+                </div>
+                <h3 className="text-xl font-semibold">{brand.name}</h3>
+                <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
+                  {brand.description ?? 'EV drivetrain, suspension, body, and electronics programs.'}
+                </p>
+                <div className="mt-6 flex items-center justify-between text-sm text-primary">
+                  Browse lineup
+                  <ArrowUpRight className="h-4 w-4" />
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+
+        {!loading && brands.length > 0 && (
+          <div className="mt-12 overflow-hidden rounded-2xl border border-border/60 bg-card/60">
+            <div className="flex min-w-full gap-10 p-6 animate-marquee" aria-hidden>
+              {[...brands, ...brands].map((brand, index) => (
+                <div key={`${brand.id}-${index}`} className="flex items-center gap-3 text-sm text-muted-foreground">
+                  {getBrandLogo(brand) ? (
+                    <img src={getBrandLogo(brand) || '/placeholder.svg'} alt={brand.name} className="h-6 w-6 object-contain" />
+                  ) : (
+                    <span className="text-xs font-semibold text-foreground">{brand.name.substring(0, 2)}</span>
+                  )}
+                  <span>{brand.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

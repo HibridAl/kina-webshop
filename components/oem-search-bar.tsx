@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface OemSearchBarProps {
   className?: string;
@@ -25,7 +27,7 @@ export function OemSearchBar({ className }: OemSearchBarProps) {
 
     if (trimmed) {
       params.set('oem', trimmed);
-      params.delete('search'); // prefer OEM search over generic search
+      params.delete('search');
     } else {
       params.delete('oem');
     }
@@ -34,17 +36,18 @@ export function OemSearchBar({ className }: OemSearchBarProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className={`flex items-center gap-2 ${className ?? ''}`}>
-      <input
-        type="text"
+    <form onSubmit={handleSubmit} className={`space-y-2 ${className ?? ''}`}>
+      <Input
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="Search by OEM or SKU"
-        className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent"
+        leadingIcon={<Search className="h-4 w-4" />}
+        trailingAction={
+          <Button type="submit" size="sm" className="rounded-full">
+            Lookup
+          </Button>
+        }
       />
-      <Button type="submit" size="sm">
-        OEM Search
-      </Button>
     </form>
   );
 }

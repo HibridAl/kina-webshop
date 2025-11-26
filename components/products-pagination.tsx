@@ -17,7 +17,7 @@ export function ProductsPagination({
     <nav className="flex items-center justify-center gap-2" aria-label="Product pagination">
       <button
         type="button"
-        className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+        className="rounded-full border border-border/70 px-3 py-1 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-50"
         disabled={currentPage <= 1 || isLoading}
         onClick={() => onPageChange(currentPage - 1)}
       >
@@ -32,10 +32,10 @@ export function ProductsPagination({
           <button
             key={page}
             type="button"
-            className={`min-w-[2.25rem] rounded-md px-2 py-1 text-sm transition ${
+            className={`min-w-[2.5rem] rounded-full px-3 py-1 text-sm font-medium transition ${
               page === currentPage
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-foreground hover:bg-muted/80'
+                ? 'bg-primary text-primary-foreground shadow'
+                : 'border border-border/70 bg-background text-foreground hover:border-primary'
             }`}
             disabled={isLoading}
             onClick={() => onPageChange(page as number)}
@@ -46,7 +46,7 @@ export function ProductsPagination({
       )}
       <button
         type="button"
-        className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+        className="rounded-full border border-border/70 px-3 py-1 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-50"
         disabled={currentPage >= totalPages || isLoading}
         onClick={() => onPageChange(currentPage + 1)}
       >

@@ -284,30 +284,26 @@ export function ProductsPageClient() {
   const totalPages = Math.max(1, Math.ceil((total || products.length) / PAGE_SIZE));
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      {/* Filters Sidebar */}
-      <div className="lg:col-span-1">
-        <div className="sticky top-20">
-          <ProductFilters
-            onFilterChange={handleFilterChange}
-            oemValue={filters.oem}
-            onResetFilters={handleFiltersReset}
-          />
-        </div>
+    <div className="grid gap-8 lg:grid-cols-[320px,minmax(0,1fr)]">
+      <div className="lg:sticky lg:top-28">
+        <ProductFilters
+          onFilterChange={handleFilterChange}
+          oemValue={filters.oem}
+          onResetFilters={handleFiltersReset}
+        />
       </div>
 
-      {/* Products Grid */}
-      <div className="lg:col-span-3">
+      <div className="space-y-6">
         {filters.vehicleId && (
-          <div className="mb-6 rounded-lg border border-border bg-card p-4 space-y-3">
+          <div className="rounded-[28px] border border-border/70 bg-card/80 p-5 shadow-sm">
             {vehicleContextLoading && (
               <p className="text-sm text-muted-foreground">Loading vehicle details…</p>
             )}
             {!vehicleContextLoading && vehicleContext && (
               <>
                 <div>
-                  <p className="text-xs uppercase text-muted-foreground">Filtering by vehicle</p>
-                  <p className="font-semibold">
+                  <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Filtering by vehicle</p>
+                  <p className="mt-2 text-xl font-semibold">
                     {vehicleContext.brand?.name ? `${vehicleContext.brand.name} · ` : ''}
                     {vehicleContext.model?.name || 'Model'}
                   </p>
@@ -315,7 +311,7 @@ export function ProductsPageClient() {
                     {vehicleContext.vehicle.variant_name || vehicleContext.vehicle.engine_type}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3 pt-3">
                   <Button asChild size="sm" variant="outline">
                     <Link href={`/vehicles/${vehicleContext.vehicle.id}`}>View vehicle details</Link>
                   </Button>
@@ -341,10 +337,10 @@ export function ProductsPageClient() {
         )}
 
         {filters.oem && (
-          <div className="mb-6 rounded-lg border border-border bg-card p-4 space-y-3">
+          <div className="rounded-[28px] border border-dashed border-border/70 bg-card/60 p-5">
             <div>
-              <p className="text-xs uppercase text-muted-foreground">Filtering by OEM number</p>
-              <p className="font-mono text-sm">{filters.oem}</p>
+              <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">OEM filter</p>
+              <p className="mt-2 font-mono text-sm">{filters.oem}</p>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button size="sm" variant="ghost" onClick={handleClearOem}>
@@ -364,7 +360,7 @@ export function ProductsPageClient() {
 
         <ProductGrid products={products} loading={loading} />
 
-        <div className="mt-6">
+        <div className="pt-2">
           <ProductsPagination
             currentPage={page}
             totalPages={totalPages}

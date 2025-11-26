@@ -45,11 +45,26 @@ export default function HomePage() {
       <Header />
       <main className="flex-1">
         <HeroSection />
-        <div className="container mx-auto px-4 -mt-10 relative z-10 mb-12">
-          <Suspense fallback={<div className="w-full h-[300px] bg-muted rounded-lg animate-pulse" />}>
-            <VehicleSelector />
-          </Suspense>
-        </div>
+
+        <section className="relative z-10 -mt-12 pb-8">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="rounded-[32px] border border-border/70 bg-card/90 p-6 shadow-2xl sm:p-10">
+              <div className="mb-6 flex flex-col gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Guided lookup</p>
+                <h2 className="text-3xl font-semibold leading-tight text-balance md:text-4xl">
+                  Start with your vehicle, finish with a ready-to-install kit.
+                </h2>
+                <p className="text-muted-foreground">
+                  Plug in the exact MG, BYD, Omoda, Geely, or Haval trim. We’ll surface fitment-ready parts, OE equivalents, and compatible fluids instantly.
+                </p>
+              </div>
+              <Suspense fallback={<div className="h-[320px] rounded-3xl bg-muted/70" />}>
+                <VehicleSelector />
+              </Suspense>
+            </div>
+          </div>
+        </section>
+
         <FeaturedBrands />
         <CategoryShowcase />
       </main>

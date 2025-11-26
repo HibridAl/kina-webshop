@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import {
   addToCart as addToCartRemote,
   getCartItems,
@@ -16,6 +17,10 @@ interface CartLine {
   quantity: number;
   price: number;
   name: string;
+  imageUrl?: string | null;
+}
+
+interface AddItemOptions {
   imageUrl?: string | null;
 }
 
@@ -110,17 +115,29 @@ export function useCart() {
   }, [items, loaded, user, supabaseReady]);
 
   const addItem = useCallback(
-    async (productId: string, name: string, price: number, quantity = 1) => {
+    async (productId: string, name: string, price: number, quantity = 1, options?: AddItemOptions) => {
       setItems((prev) => {
         const existing = prev.find((item) => item.productId === productId);
+        let next: CartLine[];
         if (existing) {
-          return prev.map((item) =>
+          next = prev.map((item) =>
             item.productId === productId
               ? { ...item, quantity: item.quantity + quantity }
               : item
           );
+        } else {
+          next = [...prev, { productId, name, price, quantity, imageUrl: options?.imageUrl ?? null }];
         }
-        return [...prev, { productId, name, price, quantity }];
+
+        if (!user || !supabaseReady) {
+          writeLocalCart(next);
+        }
+
+        return next;
+      });
+
+      toast.success('Added to cart', {
+        description: `${name} ×${quantity}`,
       });
 
       if (user && supabaseReady) {
@@ -128,15 +145,24 @@ export function useCart() {
           await addToCartRemote(user.id, productId, quantity, { price, name });
         } catch (err) {
           console.error('Error adding to remote cart:', err);
+          toast.error('Unable to sync cart', {
+            description: 'Please try again in a moment.',
+          });
         }
       }
     },
-    [user, supabaseReady]
+    [supabaseReady, user]
   );
 
   const removeItem = useCallback(
     async (productId: string) => {
-      setItems((prev) => prev.filter((item) => item.productId !== productId));
+      setItems((prev) => {
+        const next = prev.filter((item) => item.productId !== productId);
+        if (!user || !supabaseReady) {
+          writeLocalCart(next);
+        }
+        return next;
+      });
 
       if (user && supabaseReady) {
         try {
@@ -156,9 +182,13 @@ export function useCart() {
         return;
       }
 
-      setItems((prev) =>
-        prev.map((item) => (item.productId === productId ? { ...item, quantity } : item))
-      );
+      setItems((prev) => {
+        const next = prev.map((item) => (item.productId === productId ? { ...item, quantity } : item));
+        if (!user || !supabaseReady) {
+          writeLocalCart(next);
+        }
+        return next;
+      });
 
       if (user && supabaseReady) {
         try {

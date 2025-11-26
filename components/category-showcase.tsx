@@ -1,19 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { ArrowUpRight, Package, Wrench, Zap, Wind, Lightbulb } from 'lucide-react';
 import { getCategories } from '@/lib/db';
 import type { Category } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Package, Wrench, Zap, Wind, Lightbulb } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  'Maintenance & Fluids': <Package className="w-8 h-8" />,
-  'Brakes': <Wrench className="w-8 h-8" />,
-  'Electrical': <Zap className="w-8 h-8" />,
-  'Air & Fuel': <Wind className="w-8 h-8" />,
-  'Lighting': <Lightbulb className="w-8 h-8" />,
+const categoryIcons: Record<string, ReactNode> = {
+  'Maintenance & Fluids': <Package className="h-6 w-6" />,
+  Brakes: <Wrench className="h-6 w-6" />,
+  Electrical: <Zap className="h-6 w-6" />,
+  'Air & Fuel': <Wind className="h-6 w-6" />,
+  Lighting: <Lightbulb className="h-6 w-6" />,
 };
+
+const gradients = [
+  'from-[#EDF7FF] to-[#F4EEFF]',
+  'from-[#F1FFF5] to-[#EEF9FF]',
+  'from-[#FFF5F3] to-[#FFEFE8]',
+  'from-[#F4F4FF] to-[#ECF4FF]',
+  'from-[#FFF6FB] to-[#FFEFF7]',
+  'from-[#EDF9FF] to-[#F5F4FF]',
+];
 
 export function CategoryShowcase() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -23,7 +33,7 @@ export function CategoryShowcase() {
     async function loadCategories() {
       try {
         const data = await getCategories();
-        setCategories(data.slice(0, 6)); // Show first 6 categories
+        setCategories(data.slice(0, 6));
       } catch (error) {
         console.error('Error loading categories:', error);
       } finally {
@@ -35,50 +45,62 @@ export function CategoryShowcase() {
   }, []);
 
   return (
-    <section className="py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-balance">Shop by Category</h2>
-          <p className="text-lg text-muted-foreground">
-            Find exactly what you need for your vehicle
-          </p>
+    <section className="relative py-20">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" aria-hidden />
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4 pb-10 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Browse by system</p>
+            <h2 className="mt-4 text-3xl font-semibold leading-tight md:text-4xl">Drill into a subsystem in two taps.</h2>
+            <p className="mt-3 max-w-2xl text-muted-foreground">
+              These curated stacks merge sensors, harnesses, service kits, and consumables per vehicle stage. Use them as shortcuts instead of endless filter toggles.
+            </p>
+          </div>
+          <Link
+            href="/products"
+            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground transition hover:border-primary"
+          >
+            See full catalog
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {[...Array(6)].map((_, i) => (
-              <Skeleton key={i} className="h-48 rounded-lg" />
+              <Skeleton key={i} className="h-48 rounded-3xl" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {categories.map((category) => (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {categories.map((category, index) => (
               <Link
                 key={category.id}
                 href={`/products?category=${category.id}`}
-                className="group"
+                className={`group relative overflow-hidden rounded-[28px] border border-transparent bg-gradient-to-br ${gradients[index % gradients.length]} p-6 text-foreground shadow-sm transition hover:-translate-y-1 hover:shadow-xl`}
               >
-                <div className="relative overflow-hidden rounded-lg bg-card border border-border hover:border-accent transition-all p-6 h-48 flex flex-col items-center justify-center hover:shadow-lg">
-                  <div className="text-accent mb-4">
-                    {categoryIcons[category.name] || <Package className="w-8 h-8" />}
+                <div className="flex items-center justify-between">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80 text-primary">
+                    {categoryIcons[category.name] || <Package className="h-6 w-6" />}
                   </div>
-                  <h3 className="font-semibold text-center mb-2 group-hover:text-accent transition-colors">
-                    {category.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground text-center">
-                    {category.description || 'Browse this category'}
+                  <Badge variant="outline" className="rounded-full bg-white/80 text-xs">
+                    {index + 1}
+                  </Badge>
+                </div>
+                <div className="mt-6 space-y-2">
+                  <h3 className="text-xl font-semibold">{category.name}</h3>
+                  <p className="text-sm text-muted-foreground line-clamp-3">
+                    {category.description ?? 'Mix of OEM and aftermarket components validated against our compatibility graph.'}
                   </p>
+                </div>
+                <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary">
+                  Dive in
+                  <ArrowUpRight className="h-4 w-4" />
                 </div>
               </Link>
             ))}
           </div>
         )}
-
-        <div className="text-center mt-12">
-          <Link href="/products" className="text-accent font-semibold hover:underline">
-            View All Categories →
-          </Link>
-        </div>
       </div>
     </section>
   );
