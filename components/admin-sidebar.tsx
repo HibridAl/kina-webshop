@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Package, Folder, Truck, Settings } from 'lucide-react';
+import { LayoutDashboard, Package, Folder, Truck, Settings, ShoppingCart } from 'lucide-react';
 
 const navItems = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-  { label: 'Products', href: '/admin/products', icon: Package },
-  { label: 'Categories', href: '/admin/categories', icon: Folder },
-  { label: 'Suppliers', href: '/admin/suppliers', icon: Truck },
+  { href: '/admin/products', label: 'Products', icon: Package },
+  { href: '/admin/categories', label: 'Categories', icon: Folder },
+  { href: '/admin/orders', label: 'Orders', icon: ShoppingCart },
+  { href: '/admin/suppliers', label: 'Suppliers', icon: Truck },
+  { href: '/admin/setup', label: 'Setup', icon: Settings },
 ];
 
 export function AdminSidebar() {

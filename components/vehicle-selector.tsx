@@ -19,6 +19,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { getChineseBrands, getModelsByBrand, getVehiclesByModel } from "@/lib/db"
 import type { Brand, Model, Vehicle } from "@/lib/types"
+import { useLocale } from "@/hooks/use-locale"
 
 interface VehicleSelectorProps {
   className?: string
@@ -30,25 +31,53 @@ interface VehicleSelectorProps {
   mode?: "wizard" | "compact"
 }
 
-const stepCopy = [
+const STEP_COPY = [
   {
     id: "brand",
-    label: "Select brand",
-    description: "MG, BYD, Omoda, Geely, Haval",
+    label: { hu: "Márka kiválasztása", en: "Select brand" },
+    description: { hu: "MG, BYD, Omoda, Geely, Haval", en: "MG, BYD, Omoda, Geely, Haval" },
   },
   {
     id: "model",
-    label: "Choose model",
-    description: "Model year + trim",
+    label: { hu: "Modell kiválasztása", en: "Choose model" },
+    description: { hu: "Évjárat + kivitel", en: "Model year + trim" },
   },
   {
     id: "vehicle",
-    label: "Engine / battery",
-    description: "Powertrain & spec",
+    label: { hu: "Motor / akkumulátor", en: "Engine / battery" },
+    description: { hu: "Hajtáslánc és specifikáció", en: "Powertrain & spec" },
   },
 ]
 
+const FIELD_COPY = {
+  brand: {
+    label: { hu: "Márka", en: "Brand" },
+    placeholder: { hu: "Válasszon márkát", en: "Select brand" },
+    group: { hu: "Márkák", en: "Brands" },
+  },
+  model: {
+    label: { hu: "Modell", en: "Model" },
+    placeholder: { hu: "Válasszon modellt", en: "Select model" },
+    group: { hu: "Modellek", en: "Models" },
+  },
+  vehicle: {
+    label: { hu: "Hajtáslánc / kivitel", en: "Powertrain / spec" },
+    placeholder: { hu: "Válasszon kivitelt", en: "Select spec" },
+    group: { hu: "Járművek", en: "Vehicles" },
+  },
+}
+
+const CTA_COPY = {
+  helper: {
+    hu: "Adja meg az OEM hivatkozást a kompatibilitás automatikus ellenőrzéséhez.",
+    en: "Drop in your OEM reference afterwards to auto-cross check compatibility.",
+  },
+  submit: { hu: "Kompatibilis alkatrészek keresése", en: "Find compatible parts" },
+  oilLink: { hu: "Olaj- és folyadékmátrix", en: "Oil & fluids matrix" },
+}
+
 export function VehicleSelector({ className, onComplete }: VehicleSelectorProps) {
+  const { locale } = useLocale()
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -180,7 +209,7 @@ export function VehicleSelector({ className, onComplete }: VehicleSelectorProps)
   return (
     <div className={cn("space-y-8", className)}>
       <div className="grid gap-4 md:grid-cols-3">
-        {stepCopy.map((step, index) => {
+        {STEP_COPY.map((step, index) => {
           const active =
             (index === 0 && selectedBrand) ||
             (index === 1 && selectedModel) ||
@@ -202,8 +231,8 @@ export function VehicleSelector({ className, onComplete }: VehicleSelectorProps)
                 {index + 1}
               </span>
               <div>
-                <p className="font-semibold">{step.label}</p>
-                <p className="text-xs text-muted-foreground">{step.description}</p>
+                <p className="font-semibold">{step.label[locale]}</p>
+                <p className="text-xs text-muted-foreground">{step.description[locale]}</p>
               </div>
             </div>
           )
@@ -213,15 +242,15 @@ export function VehicleSelector({ className, onComplete }: VehicleSelectorProps)
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-2 rounded-3xl border border-border/80 bg-background/80 p-4">
           <Label htmlFor="brand-select" className="text-sm font-semibold text-muted-foreground">
-            Brand
+            {FIELD_COPY.brand.label[locale]}
           </Label>
           <Select value={selectedBrand} onValueChange={handleBrandChange} disabled={loadingBrands}>
             <SelectTrigger id="brand-select" className="rounded-2xl border border-border/60 bg-card/80">
-              <SelectValue placeholder="Select brand" />
+              <SelectValue placeholder={FIELD_COPY.brand.placeholder[locale]} />
             </SelectTrigger>
             <SelectContent side="bottom" position="popper" className="rounded-2xl border-border/70">
               <SelectGroup>
-                <SelectLabel>Brands</SelectLabel>
+                <SelectLabel>{FIELD_COPY.brand.group[locale]}</SelectLabel>
                 {brands.map((brand) => (
                   <SelectItem key={brand.id} value={brand.id}>
                     {brand.name}
@@ -234,15 +263,15 @@ export function VehicleSelector({ className, onComplete }: VehicleSelectorProps)
 
         <div className="space-y-2 rounded-3xl border border-border/80 bg-background/80 p-4">
           <Label htmlFor="model-select" className="text-sm font-semibold text-muted-foreground">
-            Model
+            {FIELD_COPY.model.label[locale]}
           </Label>
           <Select value={selectedModel} onValueChange={handleModelChange} disabled={!selectedBrand || loadingModels}>
             <SelectTrigger id="model-select" className="rounded-2xl border border-border/60 bg-card/80">
-              <SelectValue placeholder="Select model" />
+              <SelectValue placeholder={FIELD_COPY.model.placeholder[locale]} />
             </SelectTrigger>
             <SelectContent side="bottom" position="popper" className="rounded-2xl border-border/70">
               <SelectGroup>
-                <SelectLabel>Models</SelectLabel>
+                <SelectLabel>{FIELD_COPY.model.group[locale]}</SelectLabel>
                 {models.map((model) => (
                   <SelectItem key={model.id} value={model.id}>
                     {model.name} {model.year_start ? `(${model.year_start}-)` : ''}
@@ -255,15 +284,15 @@ export function VehicleSelector({ className, onComplete }: VehicleSelectorProps)
 
         <div className="space-y-2 rounded-3xl border border-border/80 bg-background/80 p-4">
           <Label htmlFor="vehicle-select" className="text-sm font-semibold text-muted-foreground">
-            Powertrain / spec
+            {FIELD_COPY.vehicle.label[locale]}
           </Label>
           <Select value={selectedVehicle} onValueChange={handleVehicleChange} disabled={!selectedModel || loadingVehicles}>
             <SelectTrigger id="vehicle-select" className="rounded-2xl border border-border/60 bg-card/80">
-              <SelectValue placeholder="Select spec" />
+              <SelectValue placeholder={FIELD_COPY.vehicle.placeholder[locale]} />
             </SelectTrigger>
             <SelectContent side="bottom" position="popper" className="rounded-2xl border-border/70">
               <SelectGroup>
-                <SelectLabel>Vehicles</SelectLabel>
+                <SelectLabel>{FIELD_COPY.vehicle.group[locale]}</SelectLabel>
                 {vehicles.map((vehicle) => (
                   <SelectItem key={vehicle.id} value={vehicle.id}>
                     {vehicle.engine_type ? `${vehicle.engine_type} ` : ''}
@@ -279,16 +308,14 @@ export function VehicleSelector({ className, onComplete }: VehicleSelectorProps)
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-muted-foreground">
-          Drop in your OEM reference afterwards to auto-cross check compatibility.
-        </div>
+        <div className="text-sm text-muted-foreground">{CTA_COPY.helper[locale]}</div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button onClick={handleSubmit} disabled={isSubmitDisabled} className="rounded-full">
-            Find compatible parts
+            {CTA_COPY.submit[locale]}
           </Button>
           <Button variant="ghost" className="rounded-full" asChild>
             <Link href="/oil-selector" className="inline-flex items-center gap-2">
-              Oil & fluids matrix
+              {CTA_COPY.oilLink[locale]}
               <ChevronRight className="h-4 w-4" />
             </Link>
           </Button>

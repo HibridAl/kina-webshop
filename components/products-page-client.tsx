@@ -19,6 +19,7 @@ import {
 import type { Brand, Model, Product, Vehicle } from '@/lib/types';
 import type { ProductSortOption } from '@/lib/db';
 import { Button } from '@/components/ui/button';
+import { useLocale } from '@/hooks/use-locale';
 
 const PAGE_SIZE = 12;
 
@@ -69,6 +70,7 @@ function sortProducts(list: Product[], sort: ProductSortOption) {
 }
 
 export function ProductsPageClient() {
+  const { locale } = useLocale();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -297,12 +299,16 @@ export function ProductsPageClient() {
         {filters.vehicleId && (
           <div className="rounded-[28px] border border-border/70 bg-card/80 p-5 shadow-sm">
             {vehicleContextLoading && (
-              <p className="text-sm text-muted-foreground">Loading vehicle details…</p>
+              <p className="text-sm text-muted-foreground">
+                {locale === 'hu' ? 'Járműadatok betöltése…' : 'Loading vehicle details…'}
+              </p>
             )}
             {!vehicleContextLoading && vehicleContext && (
               <>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Filtering by vehicle</p>
+                  <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+                    {locale === 'hu' ? 'Jármű szerinti szűrés' : 'Filtering by vehicle'}
+                  </p>
                   <p className="mt-2 text-xl font-semibold">
                     {vehicleContext.brand?.name ? `${vehicleContext.brand.name} · ` : ''}
                     {vehicleContext.model?.name || 'Model'}
@@ -313,23 +319,27 @@ export function ProductsPageClient() {
                 </div>
                 <div className="flex flex-wrap gap-3 pt-3">
                   <Button asChild size="sm" variant="outline">
-                    <Link href={`/vehicles/${vehicleContext.vehicle.id}`}>View vehicle details</Link>
+                    <Link href={`/vehicles/${vehicleContext.vehicle.id}`}>
+                      {locale === 'hu' ? 'Jármű adatlapja' : 'View vehicle details'}
+                    </Link>
                   </Button>
                   <Button size="sm" variant="ghost" onClick={handleClearVehicle}>
-                    Clear vehicle filter
+                    {locale === 'hu' ? 'Járműszűrő törlése' : 'Clear vehicle filter'}
                   </Button>
                 </div>
               </>
             )}
             {!vehicleContextLoading && !vehicleContext && (
               <p className="text-sm text-muted-foreground">
-                Vehicle filter active. Unable to load details (vehicle may be missing).
+                {locale === 'hu'
+                  ? 'Járműszűrő aktív, de az adatok nem érhetők el (a jármű hiányozhat).'
+                  : 'Vehicle filter active. Unable to load details (vehicle may be missing).'}
                 <button
                   type="button"
                   onClick={handleClearVehicle}
                   className="ml-2 underline"
                 >
-                  Clear filter
+                  {locale === 'hu' ? 'Szűrő törlése' : 'Clear filter'}
                 </button>
               </p>
             )}
@@ -339,12 +349,14 @@ export function ProductsPageClient() {
         {filters.oem && (
           <div className="rounded-[28px] border border-dashed border-border/70 bg-card/60 p-5">
             <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">OEM filter</p>
+              <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+                {locale === 'hu' ? 'OEM szűrő' : 'OEM filter'}
+              </p>
               <p className="mt-2 font-mono text-sm">{filters.oem}</p>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button size="sm" variant="ghost" onClick={handleClearOem}>
-                Clear OEM filter
+                {locale === 'hu' ? 'OEM szűrő törlése' : 'Clear OEM filter'}
               </Button>
             </div>
           </div>

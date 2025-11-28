@@ -4,6 +4,7 @@ import { Footer } from '@/components/footer';
 import { ModelDetail } from '@/components/model-detail';
 import { getReadonlySupabase } from '@/lib/supabase-server';
 import { absoluteUrl, defaultOgImage, seoDefaults } from '@/lib/site-metadata';
+import { mockBrands, mockModels } from '@/lib/mock-data';
 
 type ModelSummary = {
   id: string;
@@ -25,20 +26,34 @@ async function fetchModelSummary(modelId: string): Promise<ModelSummary | null> 
   return (data as ModelSummary) ?? null;
 }
 
+function getMockModelSummary(modelId: string): ModelSummary | null {
+  const model = mockModels.find((mock) => mock.id === modelId);
+  if (!model) return null;
+  const brand = mockBrands.find((mock) => mock.id === model.brand_id);
+  return {
+    id: model.id,
+    name: model.name,
+    year_start: model.year_start,
+    year_end: model.year_end,
+    brand_id: model.brand_id,
+    brands: brand ? { id: brand.id, name: brand.name } : null,
+  };
+}
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string; modelId: string }>;
 }): Promise<Metadata> {
   const { id, modelId } = await params;
-  const summary = await fetchModelSummary(modelId);
-  const brandName = summary?.brands?.name ?? 'Brand';
-  const modelName = summary?.name ?? 'Model';
+  const summary = (await fetchModelSummary(modelId)) ?? getMockModelSummary(modelId);
+  const brandName = summary?.brands?.name ?? 'Ismeretlen márka';
+  const modelName = summary?.name ?? 'Ismeretlen modell';
   const years = summary?.year_start
-    ? `${summary.year_start}${summary.year_end ? ` – ${summary.year_end}` : ' – present'}`
+    ? `${summary.year_start}${summary.year_end ? ` – ${summary.year_end}` : ' – jelen'}`
     : '';
-  const title = `${brandName} ${modelName}${years ? ` ${years}` : ''} Parts – AutoHub`;
-  const description = `Compatible parts, trims, and vehicles for the ${brandName} ${modelName}.`;
+  const title = `${brandName} ${modelName}${years ? ` ${years}` : ''} kompatibilis alkatrészek – AutoHub`;
+  const description = `Kompatibilis alkatrészek, trim-ek és járműkonfigurációk a(z) ${brandName} ${modelName} modellhez.`;
   const canonical = absoluteUrl(`/brands/${summary?.brand_id ?? id}/models/${modelId}`);
   return {
     title,

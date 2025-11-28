@@ -4,6 +4,7 @@ import { Footer } from '@/components/footer';
 import { VehicleDetail } from '@/components/vehicle-detail';
 import { getReadonlySupabase } from '@/lib/supabase-server';
 import { absoluteUrl, defaultOgImage, seoDefaults } from '@/lib/site-metadata';
+import { mockBrands, mockModels, mockVehicles } from '@/lib/mock-data';
 
 type VehicleSummary = {
   id: string;
@@ -31,18 +32,42 @@ async function fetchVehicleSummary(id: string): Promise<VehicleSummary | null> {
   return (data as VehicleSummary) ?? null;
 }
 
+function getMockVehicleSummary(id: string): VehicleSummary | null {
+  const vehicle = mockVehicles.find((mock) => mock.id === id);
+  if (!vehicle) return null;
+  const model = mockModels.find((mock) => mock.id === vehicle.model_id);
+  const brand = model ? mockBrands.find((mock) => mock.id === model.brand_id) : null;
+
+  return {
+    id: vehicle.id,
+    variant_name: vehicle.variant_name,
+    engine_type: vehicle.engine_type,
+    model_id: vehicle.model_id,
+    models: model
+      ? {
+          id: model.id,
+          name: model.name,
+          year_start: model.year_start,
+          year_end: model.year_end,
+          brand_id: model.brand_id,
+          brands: brand ? { id: brand.id, name: brand.name } : null,
+        }
+      : null,
+  };
+}
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const summary = await fetchVehicleSummary(id);
-  const brandName = summary?.models?.brands?.name ?? 'Brand';
-  const modelName = summary?.models?.name ?? 'Model';
-  const vehicleName = summary?.variant_name || summary?.engine_type || 'Vehicle';
-  const title = `${brandName} ${modelName} ${vehicleName} – Compatible Parts`;
-  const description = `Specifications and compatible parts for the ${brandName} ${modelName} ${vehicleName}.`;
+  const summary = (await fetchVehicleSummary(id)) ?? getMockVehicleSummary(id);
+  const brandName = summary?.models?.brands?.name ?? 'Ismeretlen márka';
+  const modelName = summary?.models?.name ?? 'Ismeretlen modell';
+  const vehicleName = summary?.variant_name || summary?.engine_type || 'Ismeretlen kivitel';
+  const title = `${brandName} ${modelName} ${vehicleName} – kompatibilis alkatrészek és műszaki adatok`;
+  const description = `Műszaki adatok és kompatibilis alkatrészek a(z) ${brandName} ${modelName} ${vehicleName} modellhez – bevizsgált EV és hibrid komponensek flottáknak és szervizeknek.`;
   const canonical = absoluteUrl(`/vehicles/${id}`);
   return {
     title,
@@ -58,7 +83,7 @@ export async function generateMetadata({
           url: defaultOgImage(),
           width: 1200,
           height: 630,
-          alt: `${brandName} ${modelName} ${vehicleName} parts hero`,
+          alt: `${brandName} ${modelName} ${vehicleName} alkatrész-kínálat`,
         },
       ],
     },

@@ -120,6 +120,22 @@
     @apply border-border outline-ring/50;
   }
 
+  [data-lang='hu'] {
+    display: inline;
+  }
+
+  [data-lang='en'] {
+    display: none;
+  }
+
+  html[data-locale='en'] [data-lang='hu'] {
+    display: none !important;
+  }
+
+  html[data-locale='en'] [data-lang='en'] {
+    display: inline !important;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: 'ss01' on, 'cv02' on;

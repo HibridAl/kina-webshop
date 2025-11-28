@@ -1,16 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/hooks/use-cart';
 import { useAuth } from '@/hooks/use-auth';
-import { createOrder } from '@/lib/db';
+import { createOrder, getShippingMethods } from '@/lib/db';
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Loader2, CheckCircle2, Truck, CreditCard, ShieldCheck, Zap } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { storeOrderReceipt } from '@/lib/order-receipt';
+import { OrderSummary } from '@/components/order-summary';
+import { cn } from '@/lib/utils';
+import { LocalizedText } from '@/components/ui/localized-text';
+import {
+  FALLBACK_SHIPPING_METHODS,
+  calculateOrderTotals,
+  findShippingMethod,
+  getDefaultShippingMethod,
+  type ShippingMethod,
+} from '@/lib/pricing';
 
 interface Address {
   email?: string;
@@ -25,12 +35,19 @@ interface Address {
   name?: string;
 }
 
+const DEFAULT_SHIPPING_METHOD = getDefaultShippingMethod(FALLBACK_SHIPPING_METHODS);
+
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, total, clearCart } = useCart();
-  const { user, loading: userLoading } = useAuth();
-  const [step, setStep] = useState<'shipping' | 'payment'>('shipping');
+  const searchParams = useSearchParams();
+  const statusHandledRef = useRef<string | null>(null);
+  const { items, total: subtotal, clearCart } = useCart();
+  const { user, session, loading: userLoading } = useAuth();
+  const [step, setStep] = useState<'shipping' | 'method' | 'payment'>('shipping');
   const [loading, setLoading] = useState(false);
+  const [bannerStatus, setBannerStatus] = useState<'success' | 'cancelled' | null>(null);
+  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>(FALLBACK_SHIPPING_METHODS);
+  const [shippingMethodsLoading, setShippingMethodsLoading] = useState(false);
 
   const [shipping, setShipping] = useState<Address>({
     email: '',
@@ -43,6 +60,8 @@ export default function CheckoutPage() {
     country: '',
     phone: '',
   });
+
+  const [shippingMethodId, setShippingMethodId] = useState(DEFAULT_SHIPPING_METHOD.id);
 
   const [billing, setBilling] = useState<Address>({
     name: '',
@@ -59,10 +78,93 @@ export default function CheckoutPage() {
     cardExpiry: '',
     cardCVC: '',
   });
+  const [stripeLoading, setStripeLoading] = useState(false);
 
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
+  const stripeEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+
+useEffect(() => {
+  if (!searchParams) return;
+  const status = searchParams.get('status');
+  if (!status || statusHandledRef.current === status) return;
+  if (status === 'success' || status === 'cancelled') {
+      setBannerStatus(status);
+      statusHandledRef.current = status;
+      if (status === 'success') {
+        clearCart().catch((error) => console.error('Failed to clear cart after Stripe success:', error));
+      }
+  }
+}, [searchParams, clearCart]);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadShippingMethods() {
+    try {
+      setShippingMethodsLoading(true);
+      const methods = await getShippingMethods();
+      if (cancelled) return;
+      const normalized = methods?.length ? methods : FALLBACK_SHIPPING_METHODS;
+      setShippingMethods(normalized);
+      setShippingMethodId((current) => {
+        if (normalized.some((method) => method.id === current)) {
+          return current;
+        }
+        return getDefaultShippingMethod(normalized).id;
+      });
+    } catch (error) {
+      if (!cancelled) {
+        console.error('Failed to load shipping methods:', error);
+      }
+    } finally {
+      if (!cancelled) {
+        setShippingMethodsLoading(false);
+      }
+    }
+  }
+  loadShippingMethods();
+  return () => {
+    cancelled = true;
+  };
+}, []);
+
+  // Calculations
+  const selectedMethod = findShippingMethod(shippingMethods, shippingMethodId);
+  const totals = useMemo(
+    () => calculateOrderTotals(subtotal, selectedMethod, { country: shipping.country }),
+    [subtotal, selectedMethod, shipping.country]
+  );
+  const shippingCost = totals.shipping;
+  const taxAmount = totals.tax;
+  const total = totals.total;
+  const taxLabel = totals.taxLabel;
+
+  const shippingAddress = useMemo(
+    () => ({
+      ...shipping,
+      method: selectedMethod.name,
+      methodId: selectedMethod.id,
+      methodCode: selectedMethod.code,
+      deliveryEstimate: selectedMethod.deliveryEstimate,
+      shippingCost,
+    }),
+    [shipping, selectedMethod, shippingCost]
+  );
+
+  const billingAddress = useMemo(() => {
+    if (billingSameAsShipping) {
+      return {
+        name: `${shipping.firstName ?? ''} ${shipping.lastName ?? ''}`.trim(),
+        address: shipping.address,
+        city: shipping.city,
+        state: shipping.state,
+        zipCode: shipping.zipCode,
+        country: shipping.country,
+      } as Address;
+    }
+    return billing;
+  }, [billingSameAsShipping, billing, shipping]);
 
   const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -94,35 +196,85 @@ export default function CheckoutPage() {
         country: shipping.country,
       });
     }
-    setStep('payment');
+    setStep('method');
   };
 
-  const handlePaymentSubmit = async (e: React.FormEvent) => {
+const handleMethodSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+  setStep('payment');
+};
+
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      alert('Please sign in to complete checkout.');
+      return;
+    }
+
+    if (!session?.access_token) {
+      alert('Unable to verify your session. Please sign in again.');
+      return;
+    }
+
+    setStripeLoading(true);
+    try {
+      const response = await fetch('/api/checkout/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+          shipping: shippingAddress,
+          billing: billingAddress,
+          currency: 'usd',
+          shippingMethodId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.error ?? 'Unable to start secure checkout.');
+      }
+
+      const data = await response.json();
+      if (data?.url) {
+        window.location.assign(data.url as string);
+        return;
+      }
+
+      throw new Error('Missing Stripe redirect URL.');
+    } catch (error) {
+      console.error('Stripe checkout error:', error);
+      alert('We could not start the payment session. Please try again.');
+    } finally {
+      setStripeLoading(false);
+    }
+  };
+
+  const handleMockPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const shippingAddress = { ...shipping };
-      const billingAddress = billingSameAsShipping
-        ? {
-            name: `${shipping.firstName} ${shipping.lastName}`.trim(),
-            address: shipping.address,
-            city: shipping.city,
-            state: shipping.state,
-            zipCode: shipping.zipCode,
-            country: shipping.country,
-          }
-        : billing;
-
-      if (supabaseConfigured && user) {
-        const orderItemsPayload = items.map((item) => ({
+      const orderData = {
+        items: items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
           price: item.price,
           name: item.name,
-        }));
+        })),
+        shipping: shippingAddress,
+        billing: billingAddress,
+        subtotal,
+        tax: taxAmount,
+        taxLabel,
+        shippingCost,
+        total,
+      };
 
-        const order = await createOrder(user.id, total, orderItemsPayload, {
+      if (supabaseConfigured && user) {
+        const order = await createOrder(user.id, total, orderData.items, {
           shipping: shippingAddress,
           billing: billingAddress,
         });
@@ -133,10 +285,7 @@ export default function CheckoutPage() {
 
         storeOrderReceipt({
           id: order.id,
-          total,
-          items: orderItemsPayload,
-          shipping: shippingAddress,
-          billing: billingAddress,
+          ...orderData
         });
         await clearCart();
         router.push(`/orders/${order.id}/confirmation`);
@@ -146,15 +295,7 @@ export default function CheckoutPage() {
       const mockOrderId = `ORD-${Date.now()}`;
       storeOrderReceipt({
         id: mockOrderId,
-        total,
-        items: items.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          price: item.price,
-          name: item.name,
-        })),
-        shipping: shippingAddress,
-        billing: billingAddress,
+        ...orderData
       });
       await clearCart();
       router.push(`/orders/${mockOrderId}/confirmation`);
@@ -166,15 +307,19 @@ export default function CheckoutPage() {
     }
   };
 
-  if (items.length === 0 && step !== 'payment') {
+  if (items.length === 0 && step === 'shipping') { // Only redirect if starting fresh
     return (
       <div className="min-h-screen flex flex-col">
         <Header />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
-            <h2 className="text-2xl font-bold">Your cart is empty</h2>
+            <h2 className="text-2xl font-bold">
+              <LocalizedText hu="Üres a kosara" en="Your cart is empty" />
+            </h2>
             <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
-              <Link href="/products">Continue Shopping</Link>
+              <Link href="/products">
+                <LocalizedText hu="Vásárlás folytatása" en="Continue Shopping" />
+              </Link>
             </Button>
           </div>
         </main>
@@ -183,33 +328,52 @@ export default function CheckoutPage() {
     );
   }
 
+  const steps = [
+    { id: 'shipping', label: <LocalizedText hu="Szállítás" en="Shipping" />, icon: CheckCircle2 },
+    { id: 'method', label: <LocalizedText hu="Mód" en="Method" />, icon: Truck },
+    { id: 'payment', label: <LocalizedText hu="Fizetés" en="Payment" />, icon: CreditCard },
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-muted/10">
       <Header />
-      <main className="flex-1 py-12 md:py-16">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <main className="flex-1 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {userLoading && (
             <div className="text-center py-12">
               <Loader2 className="w-6 h-6 mx-auto animate-spin mb-3" />
-              <p className="text-muted-foreground text-sm">Checking your account...</p>
+              <p className="text-muted-foreground text-sm">
+                <LocalizedText hu="Fiók ellenőrzése..." en="Checking your account..." />
+              </p>
             </div>
           )}
 
           {!userLoading && !user && (
-            <div className="mb-10 rounded-lg border border-border bg-card p-6 space-y-3">
-              <h2 className="text-xl font-semibold">Sign in to checkout</h2>
+            <div className="max-w-lg mx-auto mb-10 rounded-lg border border-border bg-card p-6 space-y-3">
+              <h2 className="text-xl font-semibold">
+                <LocalizedText hu="Jelentkezzen be a vásárláshoz" en="Sign in to checkout" />
+              </h2>
               <p className="text-sm text-muted-foreground">
-                You need an account to place an order. Sign in or create a free account, then return here to finish checkout.
+                <LocalizedText
+                  hu="A rendelés leadásához fiók szükséges. Jelentkezzen be vagy regisztráljon ingyenesen."
+                  en="You need an account to place an order. Sign in or create a free account, then return here to finish checkout."
+                />
               </p>
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                  <Link href="/auth/login?next=/checkout">Sign in</Link>
+                  <Link href="/auth/login?next=/checkout">
+                    <LocalizedText hu="Bejelentkezés" en="Sign in" />
+                  </Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href="/auth/register?next=/checkout">Create account</Link>
+                  <Link href="/auth/register?next=/checkout">
+                    <LocalizedText hu="Fiók létrehozása" en="Create account" />
+                  </Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href="/cart">Back to cart</Link>
+                  <Link href="/cart">
+                    <LocalizedText hu="Vissza a kosárhoz" en="Back to cart" />
+                  </Link>
                 </Button>
               </div>
             </div>
@@ -217,294 +381,567 @@ export default function CheckoutPage() {
 
           {!userLoading && user && (
             <>
-              <div className="flex gap-4 mb-12">
-                {['shipping', 'payment'].map((s, idx) => (
-                  <div key={s} className="flex items-center gap-2">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-                        step === s ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {idx + 1}
-                    </div>
-                    <span className="capitalize hidden sm:inline">{s}</span>
-                  </div>
-                ))}
-              </div>
-
-              {step === 'shipping' && (
-                <form onSubmit={handleShippingSubmit} className="space-y-6 bg-card border border-border p-6 rounded-lg">
-                  <h2 className="text-2xl font-bold">Shipping Information</h2>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">First Name</label>
-                      <input
-                        type="text"
-                        name="firstName"
-                        value={shipping.firstName}
-                        onChange={handleShippingChange}
-                        required
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Last Name</label>
-                      <input
-                        type="text"
-                        name="lastName"
-                        value={shipping.lastName}
-                        onChange={handleShippingChange}
-                        required
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Email</label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={shipping.email}
-                        onChange={handleShippingChange}
-                        required
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Phone</label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={shipping.phone}
-                        onChange={handleShippingChange}
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                      />
-                    </div>
-                  </div>
-
+              {bannerStatus && (
+                <div
+                  className={cn(
+                    'mb-8 rounded-2xl border p-4 flex items-start gap-3',
+                    bannerStatus === 'success'
+                      ? 'border-green-400/40 bg-green-500/5 text-green-800'
+                      : 'border-amber-400/40 bg-amber-100 text-amber-800'
+                  )}
+                >
+                  <ShieldCheck className="w-5 h-5 mt-1" />
                   <div>
-                    <label className="block text-sm font-medium mb-2">Address</label>
-                    <input
-                      type="text"
-                      name="address"
-                      value={shipping.address}
-                      onChange={handleShippingChange}
-                      required
-                      className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                    />
+                    <p className="font-semibold">
+                      {bannerStatus === 'success' ? (
+                        <LocalizedText hu="Fizetés sikeres" en="Payment received" />
+                      ) : (
+                        <LocalizedText hu="Fizetés megszakítva" en="Checkout cancelled" />
+                      )}
+                    </p>
+                    <p className="text-sm">
+                      {bannerStatus === 'success' ? (
+                        <LocalizedText
+                          hu="Rendelését véglegesítjük. Hamarosan visszaigazolást küldünk e-mailben."
+                          en="We are finalizing your order. A confirmation will arrive in your inbox shortly."
+                        />
+                      ) : (
+                        <LocalizedText
+                          hu="Megszakította a fizetést. Áttekintheti a kosarát és újrapróbálkozhat."
+                          en="You exited Stripe without completing payment. You can review your cart and try again."
+                        />
+                      )}
+                    </p>
                   </div>
+                </div>
+              )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">City</label>
-                      <input
-                        type="text"
-                        name="city"
-                        value={shipping.city}
-                        onChange={handleShippingChange}
-                        required
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">State / Province</label>
-                      <input
-                        type="text"
-                        name="state"
-                        value={shipping.state}
-                        onChange={handleShippingChange}
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">ZIP / Postal Code</label>
-                      <input
-                        type="text"
-                        name="zipCode"
-                        value={shipping.zipCode}
-                        onChange={handleShippingChange}
-                        required
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                      />
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Main Content - Forms */}
+              <div className="lg:col-span-2 space-y-8">
+                {/* Steps Indicator */}
+                <div className="flex justify-between items-center max-w-md mb-8">
+                  {steps.map((s, idx) => {
+                    const isActive = step === s.id;
+                    const isCompleted = steps.findIndex(stepItem => stepItem.id === step) > idx;
+                    
+                    return (
+                      <div key={s.id} className="flex flex-col items-center relative z-10">
+                        <div
+                          className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors duration-200",
+                            isActive ? "bg-accent text-accent-foreground" : 
+                            isCompleted ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : idx + 1}
+                        </div>
+                        <span className={cn(
+                          "text-xs mt-2 font-medium",
+                          isActive ? "text-foreground" : "text-muted-foreground"
+                        )}>
+                          {s.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {/* Progress Bar Background could go here but keeping it simple for now */}
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Country</label>
-                    <input
-                      type="text"
-                      name="country"
-                      value={shipping.country}
-                      onChange={handleShippingChange}
-                      className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                    />
-                  </div>
+                {step === 'shipping' && (
+                  <form onSubmit={handleShippingSubmit} className="space-y-6 bg-card border border-border p-6 rounded-lg">
+                    <h2 className="text-2xl font-bold">
+                      <LocalizedText hu="Szállítási adatok" en="Shipping Information" />
+                    </h2>
 
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="billingSame"
-                      type="checkbox"
-                      checked={billingSameAsShipping}
-                      onChange={(e) => setBillingSameAsShipping(e.target.checked)}
-                    />
-                    <label htmlFor="billingSame" className="text-sm text-muted-foreground">
-                      Billing address matches shipping
-                    </label>
-                  </div>
-
-                  {!billingSameAsShipping && (
-                    <div className="space-y-4 border border-border rounded-lg p-4">
-                      <h3 className="font-medium">Billing Address</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium mb-2">Full Name</label>
+                        <label className="block text-sm font-medium mb-2">
+                          <LocalizedText hu="Keresztnév" en="First Name" />
+                        </label>
                         <input
                           type="text"
-                          name="name"
-                          value={billing.name}
-                          onChange={handleBillingChange}
-                          className="w-full px-4 py-2 border border-border rounded-lg bg-background"
+                          name="firstName"
+                          value={shipping.firstName}
+                          onChange={handleShippingChange}
+                          required
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-2">Address</label>
+                        <label className="block text-sm font-medium mb-2">
+                          <LocalizedText hu="Vezetéknév" en="Last Name" />
+                        </label>
                         <input
                           type="text"
-                          name="address"
-                          value={billing.address}
-                          onChange={handleBillingChange}
-                          className="w-full px-4 py-2 border border-border rounded-lg bg-background"
+                          name="lastName"
+                          value={shipping.lastName}
+                          onChange={handleShippingChange}
+                          required
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
                         />
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">E-mail</label>
+                        <input
+                          type="email"
+                          name="email"
+                          value={shipping.email}
+                          onChange={handleShippingChange}
+                          required
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          <LocalizedText hu="Telefonszám" en="Phone" />
+                        </label>
+                        <input
+                          type="tel"
+                          name="phone"
+                          value={shipping.phone}
+                          onChange={handleShippingChange}
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        <LocalizedText hu="Cím" en="Address" />
+                      </label>
+                      <input
+                        type="text"
+                        name="address"
+                        value={shipping.address}
+                        onChange={handleShippingChange}
+                        required
+                        className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          <LocalizedText hu="Város" en="City" />
+                        </label>
                         <input
                           type="text"
                           name="city"
-                          placeholder="City"
-                          value={billing.city}
-                          onChange={handleBillingChange}
-                          className="px-4 py-2 border border-border rounded-lg bg-background"
-                        />
-                        <input
-                          type="text"
-                          name="state"
-                          placeholder="State"
-                          value={billing.state}
-                          onChange={handleBillingChange}
-                          className="px-4 py-2 border border-border rounded-lg bg-background"
-                        />
-                        <input
-                          type="text"
-                          name="zipCode"
-                          placeholder="ZIP"
-                          value={billing.zipCode}
-                          onChange={handleBillingChange}
-                          className="px-4 py-2 border border-border rounded-lg bg-background"
+                          value={shipping.city}
+                          onChange={handleShippingChange}
+                          required
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-2">Country</label>
+                        <label className="block text-sm font-medium mb-2">
+                          <LocalizedText hu="Megye / Állam" en="State / Province" />
+                        </label>
                         <input
                           type="text"
-                          name="country"
-                          value={billing.country}
-                          onChange={handleBillingChange}
-                          className="w-full px-4 py-2 border border-border rounded-lg bg-background"
+                          name="state"
+                          value={shipping.state}
+                          onChange={handleShippingChange}
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          <LocalizedText hu="Irányítószám" en="ZIP / Postal Code" />
+                        </label>
+                        <input
+                          type="text"
+                          name="zipCode"
+                          value={shipping.zipCode}
+                          onChange={handleShippingChange}
+                          required
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
                         />
                       </div>
                     </div>
-                  )}
 
-                  <div className="flex justify-between gap-4">
-                    <Button variant="outline" asChild>
-                      <Link href="/cart">Back to cart</Link>
-                    </Button>
-                    <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                      Continue to payment
-                    </Button>
-                  </div>
-                </form>
-              )}
-
-              {step === 'payment' && (
-                <form onSubmit={handlePaymentSubmit} className="space-y-6 bg-card border border-border p-6 rounded-lg">
-                  <h2 className="text-2xl font-bold">Payment Information</h2>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Cardholder Name</label>
-                    <input
-                      type="text"
-                      name="cardName"
-                      value={payment.cardName}
-                      onChange={handlePaymentChange}
-                      required
-                      className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Card Number</label>
-                    <input
-                      type="text"
-                      name="cardNumber"
-                      value={payment.cardNumber}
-                      onChange={handlePaymentChange}
-                      placeholder="1234 5678 9012 3456"
-                      required
-                      className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Expiration Date</label>
+                      <label className="block text-sm font-medium mb-2">
+                        <LocalizedText hu="Ország" en="Country" />
+                      </label>
                       <input
                         type="text"
-                        name="cardExpiry"
-                        value={payment.cardExpiry}
-                        onChange={handlePaymentChange}
-                        placeholder="MM/YY"
-                        required
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
+                        name="country"
+                        value={shipping.country}
+                        onChange={handleShippingChange}
+                        className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">CVV</label>
-                      <input
-                        type="text"
-                        name="cardCVC"
-                        value={payment.cardCVC}
-                        onChange={handlePaymentChange}
-                        placeholder="123"
-                        required
-                        className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                      />
-                    </div>
-                  </div>
 
-                  <div className="flex justify-between gap-4">
-                    <Button type="button" variant="outline" onClick={() => setStep('shipping')}>
-                      Back to shipping
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="bg-accent hover:bg-accent/90 text-accent-foreground"
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        `Pay $${total.toFixed(2)}`
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              )}
+                    <div className="flex items-center gap-2 pt-2">
+                      <input
+                        id="billingSame"
+                        type="checkbox"
+                        checked={billingSameAsShipping}
+                        onChange={(e) => setBillingSameAsShipping(e.target.checked)}
+                        className="rounded border-gray-300 text-accent focus:ring-accent"
+                      />
+                      <label htmlFor="billingSame" className="text-sm text-muted-foreground cursor-pointer select-none">
+                        <LocalizedText
+                          hu="A számlázási cím megegyezik a szállítási címmel"
+                          en="Billing address matches shipping"
+                        />
+                      </label>
+                    </div>
+
+                    {!billingSameAsShipping && (
+                      <div className="space-y-4 border border-border rounded-lg p-4 mt-4 bg-muted/30">
+                        <h3 className="font-medium">
+                          <LocalizedText hu="Számlázási cím" en="Billing Address" />
+                        </h3>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            <LocalizedText hu="Teljes név" en="Full Name" />
+                          </label>
+                          <input
+                            type="text"
+                            name="name"
+                            value={billing.name}
+                            onChange={handleBillingChange}
+                            className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            <LocalizedText hu="Cím" en="Address" />
+                          </label>
+                          <input
+                            type="text"
+                            name="address"
+                            value={billing.address}
+                            onChange={handleBillingChange}
+                            className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <input
+                            type="text"
+                            name="city"
+                            placeholder="City"
+                            value={billing.city}
+                            onChange={handleBillingChange}
+                            className="px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                          />
+                          <input
+                            type="text"
+                            name="state"
+                            placeholder="State"
+                            value={billing.state}
+                            onChange={handleBillingChange}
+                            className="px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                          />
+                          <input
+                            type="text"
+                            name="zipCode"
+                            placeholder="ZIP"
+                            value={billing.zipCode}
+                            onChange={handleBillingChange}
+                            className="px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            <LocalizedText hu="Ország" en="Country" />
+                          </label>
+                          <input
+                            type="text"
+                            name="country"
+                            value={billing.country}
+                            onChange={handleBillingChange}
+                            className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between gap-4 pt-4">
+                      <Button variant="outline" asChild>
+                        <Link href="/cart">
+                          <LocalizedText hu="Vissza a kosárhoz" en="Back to cart" />
+                        </Link>
+                      </Button>
+                      <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                        <LocalizedText hu="Tovább a szállításhoz" en="Continue to Method" />
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                {step === 'method' && (
+                  <form onSubmit={handleMethodSubmit} className="space-y-6 bg-card border border-border p-6 rounded-lg">
+                    <h2 className="text-2xl font-bold">
+                      <LocalizedText hu="Szállítási mód" en="Select Shipping Method" />
+                    </h2>
+
+                    {shippingMethodsLoading && (
+                      <p className="text-sm text-muted-foreground">
+                        <LocalizedText hu="Opciók frissítése…" en="Refreshing shipping options…" />
+                      </p>
+                    )}
+
+                    <div className="space-y-3">
+                      {shippingMethods.map((method) => (
+                        <div 
+                          key={method.id}
+                          onClick={() => setShippingMethodId(method.id)}
+                          className={cn(
+                            "flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-all hover:border-accent/50 hover:bg-accent/5",
+                            shippingMethodId === method.id ? "border-accent bg-accent/10 ring-1 ring-accent shadow-sm" : "border-border bg-card"
+                          )}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "flex h-10 w-10 items-center justify-center rounded-full border",
+                              shippingMethodId === method.id ? "border-accent bg-accent/20 text-accent-foreground" : "border-border bg-muted/50 text-muted-foreground"
+                            )}>
+                              {method.isExpress ? <Zap className="h-5 w-5" /> : <Truck className="h-5 w-5" />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold">{method.name}</p>
+                                {method.isExpress && (
+                                  <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold uppercase text-accent-foreground">
+                                    Express
+                                  </span>
+                                )}
+                              </div>
+                              {(method.deliveryEstimate || method.description) && (
+                                <p className="text-sm text-muted-foreground">
+                                  {method.deliveryEstimate ?? method.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-lg">
+                              ${method.price.toFixed(2)}
+                            </div>
+                            {shippingMethodId === method.id && (
+                              <CheckCircle2 className="ml-auto mt-1 h-4 w-4 text-accent" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-between gap-4 pt-4">
+                      <Button type="button" variant="outline" onClick={() => setStep('shipping')}>
+                        <LocalizedText hu="Vissza a címhez" en="Back to Address" />
+                      </Button>
+                      <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                        <LocalizedText hu="Tovább a fizetéshez" en="Continue to Payment" />
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                {step === 'payment' && (
+                  stripeEnabled ? (
+                    <div className="space-y-6 bg-card border border-border p-6 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <ShieldCheck className="w-5 h-5 text-accent" />
+                        <div>
+                          <h2 className="text-2xl font-bold">
+                            <LocalizedText hu="Biztonságos fizetés" en="Secure Payment" />
+                          </h2>
+                          <p className="text-sm text-muted-foreground">
+                            <LocalizedText
+                              hu="Fizessen biztonságosan a Stripe rendszerén keresztül."
+                              en="Complete checkout through Stripe's encrypted payment flow and return here for confirmation."
+                            />
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 rounded-xl border border-border p-4">
+                        {items.map((item) => (
+                          <div key={item.productId} className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {item.name} × {item.quantity}
+                            </span>
+                            <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between text-sm text-muted-foreground pt-2">
+                          <span>
+                            <LocalizedText hu="Részösszeg" en="Subtotal" />
+                          </span>
+                          <span>${subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <span>
+                            <LocalizedText hu="Szállítás" en="Shipping" /> ({selectedMethod.name}
+                            {selectedMethod.deliveryEstimate ? ` • ${selectedMethod.deliveryEstimate}` : ''})
+                          </span>
+                          <span>${shippingCost.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-muted-foreground pb-2 border-b border-border">
+                          <span>
+                            <LocalizedText hu="Becsült adó" en="Estimated tax" /> ({taxLabel})
+                          </span>
+                          <span>${taxAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-lg font-semibold">
+                          <span>
+                            <LocalizedText hu="Összesen" en="Total due" />
+                          </span>
+                          <span>${total.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                        <Button type="button" variant="outline" onClick={() => setStep('method')}>
+                          <LocalizedText hu="Vissza a szállítási módhoz" en="Back to Method" />
+                        </Button>
+                        <Button
+                          type="button"
+                          className="bg-accent hover:bg-accent/90 text-accent-foreground flex-1"
+                          disabled={stripeLoading}
+                          onClick={handleStripeCheckout}
+                        >
+                          {stripeLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              <LocalizedText hu="Fizetés indítása..." en="Starting secure checkout..." />
+                            </>
+                          ) : (
+                            <>
+                              <LocalizedText hu="Fizetés Stripe-pal" en="Pay with Stripe" />
+                              {` $${total.toFixed(2)}`}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        <LocalizedText
+                          hu="Módosítani szeretne? A Stripe oldalon megszakíthatja a folyamatot, és visszatérhet ide anélkül, hogy elveszítené a kosarát."
+                          en="Need to make a change? You can cancel on the Stripe page and return here without losing your cart."
+                        />
+                      </p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleMockPaymentSubmit} className="space-y-6 bg-card border border-border p-6 rounded-lg">
+                      <h2 className="text-2xl font-bold">
+                        <LocalizedText hu="Fizetési adatok" en="Payment Information" />
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        <LocalizedText
+                          hu="A Stripe nincs konfigurálva, így a kártyaadatok megadása helyi szimulációval történik."
+                          en="Stripe isn't configured yet, so card entry happens locally. Set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to enable hosted checkout."
+                        />
+                      </p>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          <LocalizedText hu="Kártyabirtokos neve" en="Cardholder Name" />
+                        </label>
+                        <input
+                          type="text"
+                          name="cardName"
+                          value={payment.cardName}
+                          onChange={handlePaymentChange}
+                          required
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          <LocalizedText hu="Kártyaszám" en="Card Number" />
+                        </label>
+                        <input
+                          type="text"
+                          name="cardNumber"
+                          value={payment.cardNumber}
+                          onChange={handlePaymentChange}
+                          placeholder="1234 5678 9012 3456"
+                          required
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            <LocalizedText hu="Lejárati dátum" en="Expiration Date" />
+                          </label>
+                          <input
+                            type="text"
+                            name="cardExpiry"
+                            value={payment.cardExpiry}
+                            onChange={handlePaymentChange}
+                            placeholder="MM/YY"
+                            required
+                            className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">CVV</label>
+                          <input
+                            type="text"
+                            name="cardCVC"
+                            value={payment.cardCVC}
+                            onChange={handlePaymentChange}
+                            placeholder="123"
+                            required
+                            className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between gap-4 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setStep('method')}>
+                          <LocalizedText hu="Vissza a szállítási módhoz" en="Back to Method" />
+                        </Button>
+                        <Button
+                          type="submit"
+                          className="bg-accent hover:bg-accent/90 text-accent-foreground"
+                          disabled={loading}
+                        >
+                          {loading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              <LocalizedText hu="Feldolgozás..." en="Processing..." />
+                            </>
+                          ) : (
+                            <>
+                              <LocalizedText hu="Fizetés" en="Pay" /> {` $${total.toFixed(2)}`}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  )
+                )}
+              </div>
+
+              {/* Order Summary Sidebar */}
+              <div className="lg:col-span-1">
+                <OrderSummary
+                  subtotal={subtotal}
+                  shipping={shippingCost}
+                  tax={taxAmount}
+                  total={total}
+                  className="sticky top-24"
+                />
+                <div className="mt-4 text-xs text-muted-foreground space-y-1">
+                  <p>
+                    Shipping: {selectedMethod.name}
+                    {selectedMethod.deliveryEstimate ? ` (${selectedMethod.deliveryEstimate})` : ''}
+                  </p>
+                  <p>{taxLabel}</p>
+                </div>
+              </div>
+              </div>
             </>
           )}
         </div>

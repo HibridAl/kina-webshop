@@ -117,8 +117,8 @@ export interface CartItem {
   user_id: string;
   product_id: string;
   quantity: number;
-  price_at_add: number | null;
-  name_snapshot: string | null;
+  price_at_add?: number | null;
+  name_snapshot?: string | null;
   products?: Pick<Product, 'name' | 'price' | 'image_url'> | null;
   created_at: string;
   updated_at: string;

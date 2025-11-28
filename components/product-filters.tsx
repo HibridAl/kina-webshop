@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import type { Category, Brand } from '@/lib/types';
 import { Filter, Search } from 'lucide-react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface ProductFiltersProps {
   onFilterChange: (filters: {
@@ -21,6 +22,7 @@ interface ProductFiltersProps {
 }
 
 export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: ProductFiltersProps) {
+  const { locale } = useLocale();
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -55,28 +57,39 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
 
   const badgeChips = [
     selectedCategory && {
-      label: categories.find((cat) => cat.id === selectedCategory)?.name ?? 'Category',
+      label:
+        categories.find((cat) => cat.id === selectedCategory)?.name ??
+        (locale === 'hu' ? 'Kategória' : 'Category'),
       type: 'category' as const,
     },
     selectedBrand && {
-      label: brands.find((brand) => brand.id === selectedBrand)?.name ?? 'Brand',
+      label:
+        brands.find((brand) => brand.id === selectedBrand)?.name ??
+        (locale === 'hu' ? 'Márka' : 'Brand'),
       type: 'brand' as const,
     },
-    inStock && { label: 'In stock only', type: 'stock' as const },
+    inStock && {
+      label: locale === 'hu' ? 'Csak raktáron' : 'In stock only',
+      type: 'stock' as const,
+    },
   ].filter(Boolean) as { label: string; type: 'category' | 'brand' | 'stock' }[];
 
   return (
     <aside className="space-y-6 rounded-[32px] border border-border/70 bg-card/80 p-6 shadow-lg">
       <div className="flex items-center gap-2 text-sm font-semibold">
         <Filter className="h-4 w-4" />
-        Refine catalog
+        {locale === 'hu' ? 'Katalógus szűrése' : 'Refine catalog'}
       </div>
 
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Search</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+          {locale === 'hu' ? 'Keresés' : 'Search'}
+        </p>
         <Input
           type="text"
-          placeholder="Search products, SKU, OEM"
+          placeholder={
+            locale === 'hu' ? 'Termék, SKU vagy OEM keresése' : 'Search products, SKU, OEM'
+          }
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           disabled={Boolean(oemValue)}
@@ -85,7 +98,13 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
         />
         {oemValue && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Filtering by OEM (<span className="font-mono text-foreground">{oemValue}</span>). Clear the OEM filter to re-enable search.
+            {locale === 'hu'
+              ? 'OEM szűrő aktív '
+              : 'Filtering by OEM '}
+            (<span className="font-mono text-foreground">{oemValue}</span>).
+            {locale === 'hu'
+              ? ' Törölje az OEM szűrőt a keresés engedélyezéséhez.'
+              : ' Clear the OEM filter to re-enable search.'}
           </p>
         )}
       </div>
@@ -101,14 +120,16 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
       )}
 
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Category</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+          {locale === 'hu' ? 'Kategória' : 'Category'}
+        </p>
         <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto pr-1">
           <Button
             variant={selectedCategory === '' ? 'default' : 'outline'}
             onClick={() => setSelectedCategory('')}
             className="justify-start rounded-2xl text-sm"
           >
-            All categories
+            {locale === 'hu' ? 'Összes kategória' : 'All categories'}
           </Button>
           {categories.map((cat) => (
             <Button
@@ -124,14 +145,16 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
       </div>
 
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Brand</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+          {locale === 'hu' ? 'Márka' : 'Brand'}
+        </p>
         <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto pr-1">
           <Button
             variant={selectedBrand === '' ? 'default' : 'outline'}
             onClick={() => setSelectedBrand('')}
             className="justify-start rounded-2xl text-sm"
           >
-            All brands
+            {locale === 'hu' ? 'Összes márka' : 'All brands'}
           </Button>
           {brands.map((brand) => (
             <Button
@@ -147,9 +170,14 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
       </div>
 
       <div className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Price range</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+          {locale === 'hu' ? 'Ártartomány' : 'Price range'}
+        </p>
         <div>
-          <label className="text-xs text-muted-foreground">Min: ${priceRange[0]}</label>
+          <label className="text-xs text-muted-foreground">
+            {locale === 'hu' ? 'Min.: $' : 'Min: $'}
+            {priceRange[0]}
+          </label>
           <input
             type="range"
             min="0"
@@ -160,7 +188,10 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
           />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground">Max: ${priceRange[1]}</label>
+          <label className="text-xs text-muted-foreground">
+            {locale === 'hu' ? 'Max.: $' : 'Max: $'}
+            {priceRange[1]}
+          </label>
           <input
             type="range"
             min="0"
@@ -179,7 +210,7 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
           checked={inStock}
           onChange={(e) => setInStock(e.target.checked)}
         />
-        In stock only
+        {locale === 'hu' ? 'Csak raktáron' : 'In stock only'}
       </label>
 
       <Button
@@ -194,7 +225,7 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
         variant="outline"
         className="w-full rounded-2xl"
       >
-        Reset filters
+        {locale === 'hu' ? 'Szűrők visszaállítása' : 'Reset filters'}
       </Button>
     </aside>
   );

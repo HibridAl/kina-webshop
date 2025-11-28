@@ -65,13 +65,16 @@ export function useCart() {
 
   useEffect(() => {
     let cancelled = false;
+    console.log('useCart useEffect triggered. User:', user?.id, 'Supabase Ready:', supabaseReady);
 
     async function load() {
       setLoaded(false);
       if (user && supabaseReady) {
+        console.log('Loading remote cart for user:', user.id);
         try {
           const stored = readLocalCart();
           if (stored.length) {
+            console.log('Migrating local cart to remote:', stored);
             await Promise.all(
               stored.map((line) =>
                 addToCartRemote(user.id, line.productId, line.quantity, {
@@ -81,10 +84,12 @@ export function useCart() {
               )
             );
             writeLocalCart([]);
+            console.log('Local cart migrated and cleared.');
           }
 
           const remote = await getCartItems(user.id);
           if (!cancelled) {
+            console.log('Remote cart items fetched:', remote);
             setItems(remote.map(mapRemoteCartItem));
             setLoaded(true);
           }
@@ -96,6 +101,7 @@ export function useCart() {
 
       const local = readLocalCart();
       if (!cancelled) {
+        console.log('Loading local cart:', local);
         setItems(local);
         setLoaded(true);
       }
@@ -105,17 +111,20 @@ export function useCart() {
 
     return () => {
       cancelled = true;
+      console.log('useCart useEffect cleanup.');
     };
   }, [user, supabaseReady]);
 
   useEffect(() => {
     if (loaded && (!user || !supabaseReady)) {
+      console.log('Persisting cart to local storage:', items);
       writeLocalCart(items);
     }
   }, [items, loaded, user, supabaseReady]);
 
   const addItem = useCallback(
     async (productId: string, name: string, price: number, quantity = 1, options?: AddItemOptions) => {
+      console.log('Adding item:', productId, name, quantity);
       setItems((prev) => {
         const existing = prev.find((item) => item.productId === productId);
         let next: CartLine[];
@@ -131,6 +140,7 @@ export function useCart() {
 
         if (!user || !supabaseReady) {
           writeLocalCart(next);
+          console.log('Added to local cart. New local cart:', next);
         }
 
         return next;
@@ -142,7 +152,9 @@ export function useCart() {
 
       if (user && supabaseReady) {
         try {
+          console.log('Adding to remote cart for user:', user.id, 'product:', productId, 'quantity:', quantity);
           await addToCartRemote(user.id, productId, quantity, { price, name });
+          console.log('Item added to remote cart successfully.');
         } catch (err) {
           console.error('Error adding to remote cart:', err);
           toast.error('Unable to sync cart', {
@@ -156,10 +168,12 @@ export function useCart() {
 
   const removeItem = useCallback(
     async (productId: string) => {
+      console.log('Removing item:', productId);
       setItems((prev) => {
         const next = prev.filter((item) => item.productId !== productId);
         if (!user || !supabaseReady) {
           writeLocalCart(next);
+          console.log('Removed from local cart. New local cart:', next);
         }
         return next;
       });
@@ -167,6 +181,7 @@ export function useCart() {
       if (user && supabaseReady) {
         try {
           await removeFromCartRemote(user.id, productId);
+          console.log('Item removed from remote cart successfully.');
         } catch (err) {
           console.error('Error removing from remote cart:', err);
         }
@@ -177,6 +192,7 @@ export function useCart() {
 
   const updateQuantity = useCallback(
     async (productId: string, quantity: number) => {
+      console.log('Updating quantity for item:', productId, 'to:', quantity);
       if (quantity <= 0) {
         removeItem(productId);
         return;
@@ -186,6 +202,7 @@ export function useCart() {
         const next = prev.map((item) => (item.productId === productId ? { ...item, quantity } : item));
         if (!user || !supabaseReady) {
           writeLocalCart(next);
+          console.log('Updated local cart quantity. New local cart:', next);
         }
         return next;
       });
@@ -193,6 +210,7 @@ export function useCart() {
       if (user && supabaseReady) {
         try {
           await updateCartItemQuantity(user.id, productId, quantity);
+          console.log('Quantity updated in remote cart successfully.');
         } catch (err) {
           console.error('Error updating remote cart quantity:', err);
         }
@@ -202,16 +220,19 @@ export function useCart() {
   );
 
   const clearCart = useCallback(async () => {
+    console.log('Clearing cart.');
     setItems([]);
 
     if (user && supabaseReady) {
       try {
         await clearCartItems(user.id);
+        console.log('Remote cart cleared successfully.');
       } catch (err) {
         console.error('Error clearing remote cart:', err);
       }
     } else {
       writeLocalCart([]);
+      console.log('Local cart cleared.');
     }
   }, [supabaseReady, user]);
 

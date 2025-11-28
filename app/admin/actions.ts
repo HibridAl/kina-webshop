@@ -171,3 +171,121 @@ export async function deleteSupplierAction(supplierId: string): Promise<ActionRe
   revalidatePath('/admin/suppliers');
   return { success: true };
 }
+
+// --- Order Actions ---
+
+export interface AdminOrder extends Order {
+  users: { email: string | null; company_name: string | null } | null;
+  payment_status?: string; // Computed from order_payments
+}
+
+export interface AdminOrderDetails extends AdminOrder {
+  order_items: (OrderItem & { products: { name: string; sku: string; image_url: string | null } | null })[];
+  order_payments: OrderPayment[];
+}
+
+export async function getAdminOrdersAction({
+  page = 1,
+  limit = 20,
+  status,
+  search,
+}: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  search?: string;
+}): Promise<{ orders: AdminOrder[]; total: number }> {
+  const supabase = getServiceSupabase();
+  const start = (page - 1) * limit;
+  const end = start + limit - 1;
+
+  let query = supabase
+    .from('orders')
+    .select('*, users(email, company_name), order_payments(status)', { count: 'exact' });
+
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  if (search) {
+    // Searching by ID or user email is tricky with single query.
+    // For now, let's support searching by Order ID directly if it looks like UUID,
+    // or filter by status if not.
+    // Supabase doesn't easily support "or" across joined tables in one go without complex syntax.
+    // Let's try basic ID search.
+    if (search.match(/^[0-9a-f]{8}-/i)) {
+        query = query.eq('id', search);
+    }
+  }
+
+  query = query.order('created_at', { ascending: false }).range(start, end);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('[admin] getAdminOrdersAction error', error);
+    return { orders: [], total: 0 };
+  }
+
+  const orders = (data as any[]).map((order) => {
+    // Derive a simple payment status
+    const payments = order.order_payments as { status: string }[] | null;
+    const paymentStatus = payments && payments.length > 0 ? payments[0].status : 'pending';
+    return {
+        ...order,
+        payment_status: paymentStatus,
+    } as AdminOrder;
+  });
+
+  return { orders, total: count ?? 0 };
+}
+
+export async function getAdminOrderDetailsAction(orderId: string): Promise<AdminOrderDetails | null> {
+    const supabase = getServiceSupabase();
+    
+    const { data, error } = await supabase
+        .from('orders')
+        .select(`
+            *,
+            users(email, company_name),
+            order_items(*, products(name, sku, image_url)),
+            order_payments(*)
+        `)
+        .eq('id', orderId)
+        .single();
+
+    if (error) {
+        console.error('[admin] getAdminOrderDetailsAction error', error);
+        return null;
+    }
+
+    return data as AdminOrderDetails;
+}
+
+export async function updateOrderStatusAction(orderId: string, status: string): Promise<ActionResult> {
+    const supabase = getServiceSupabase();
+    const { error } = await supabase
+        .from('orders')
+        .update({ status })
+        .eq('id', orderId);
+
+    if (error) {
+        return { success: false, error: error.message };
+    }
+    revalidatePath('/admin/orders');
+    return { success: true };
+}
+
+export async function updatePaymentStatusAction(paymentId: string, status: string): Promise<ActionResult> {
+    const supabase = getServiceSupabase();
+    const { error } = await supabase
+        .from('order_payments')
+        .update({ status })
+        .eq('id', paymentId);
+
+    if (error) {
+        return { success: false, error: error.message };
+    }
+    revalidatePath('/admin/orders');
+    return { success: true };
+}

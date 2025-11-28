@@ -7,6 +7,7 @@ import { getBrands } from '@/lib/db';
 import type { Brand } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 const brandLogoMap: Record<string, string> = {
   MG: '/CarBrands/mg.png',
@@ -49,17 +50,29 @@ export function FeaturedBrands() {
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-6 pb-10 md:flex-row md:items-end md:justify-between">
           <div className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Trusted OEM partners</p>
+            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+              <LocalizedText hu="Megbízható OEM partnerek" en="Trusted OEM partners" />
+            </p>
             <h2 className="text-3xl font-semibold leading-tight md:text-4xl">
-              Verified inventory direct from China’s flagship EV makers.
+              <LocalizedText
+                hu="Ellenőrzött készletek Kína vezető EV-gyártóitól közvetlenül."
+                en="Verified inventory direct from China’s flagship EV makers."
+              />
             </h2>
             <p className="text-muted-foreground md:w-3/4">
-              Every brand tile pipes into live Supabase tables with SKU provenance, sustainability metrics, and readiness notes per market.
+              <LocalizedText
+                hu="Minden márkakártya élő Supabase táblákra épül, SKU-eredettel, fenntarthatósági mutatókkal és piacokra bontott elérhetőségi megjegyzésekkel."
+                en="Every brand tile pipes into live Supabase tables with SKU provenance, sustainability metrics, and readiness notes per market."
+              />
             </p>
           </div>
           <div className="flex flex-wrap gap-3 text-sm">
-            <Badge variant="outline" className="rounded-full px-4 py-2">Carbon-neutral packaging</Badge>
-            <Badge className="rounded-full px-4 py-2">OEM docs attached</Badge>
+            <Badge variant="outline" className="rounded-full px-4 py-2">
+              <LocalizedText hu="Szén-semleges csomagolás" en="Carbon-neutral packaging" />
+            </Badge>
+            <Badge className="rounded-full px-4 py-2">
+              <LocalizedText hu="OEM dokumentáció mellékelve" en="OEM docs attached" />
+            </Badge>
           </div>
         </div>
 
@@ -95,10 +108,15 @@ export function FeaturedBrands() {
                 </div>
                 <h3 className="text-xl font-semibold">{brand.name}</h3>
                 <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-                  {brand.description ?? 'EV drivetrain, suspension, body, and electronics programs.'}
+                  {brand.description ?? (
+                    <LocalizedText
+                      hu="EV hajtáslánc, futómű, karosszéria és elektronikai programok."
+                      en="EV drivetrain, suspension, body, and electronics programs."
+                    />
+                  )}
                 </p>
                 <div className="mt-6 flex items-center justify-between text-sm text-primary">
-                  Browse lineup
+                  <LocalizedText hu="Modellkínálat megtekintése" en="Browse lineup" />
                   <ArrowUpRight className="h-4 w-4" />
                 </div>
               </Link>

@@ -7,6 +7,7 @@ import { getProductById, getSuppliers } from '@/lib/db';
 import { useCart } from '@/hooks/use-cart';
 import type { Product, Supplier } from '@/lib/types';
 import { ShoppingCart, Zap, Package, TrendingUp } from 'lucide-react';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 interface ProductDetailPageProps {
   productId: string;
@@ -40,7 +41,12 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
   }, [productId]);
 
   if (loading) return <Skeleton className="h-96" />;
-  if (!product) return <div>Product not found</div>;
+  if (!product)
+    return (
+      <div className="rounded-lg border border-border/70 p-6 text-sm text-muted-foreground">
+        <LocalizedText hu="A termék nem található." en="Product not found." />
+      </div>
+    );
 
   const heroImage = product.image_url || '/placeholder.svg?height=400&width=500&query=automotive part';
 
@@ -64,7 +70,9 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
             {/* Product Info */}
             <div className="space-y-6">
               <div>
-                <p className="text-sm text-accent font-semibold mb-2">SKU: {product.sku}</p>
+                <p className="text-sm text-accent font-semibold mb-2">
+                  <LocalizedText hu="Cikkszám (SKU):" en="SKU:" /> {product.sku}
+                </p>
                 <h1 className="text-4xl font-bold mb-4">{product.name}</h1>
                 <p className="text-lg text-muted-foreground">{product.description}</p>
               </div>
@@ -85,7 +93,9 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
               {/* OEM Numbers */}
               {product.oem_numbers && product.oem_numbers.length > 0 && (
                 <div className="bg-muted p-4 rounded-lg">
-                  <h3 className="font-semibold mb-2">OEM Part Numbers</h3>
+                  <h3 className="font-semibold mb-2">
+                    <LocalizedText hu="OEM cikkszámok" en="OEM Part Numbers" />
+                  </h3>
                   <div className="flex flex-wrap gap-2">
                     {product.oem_numbers.map((oem, idx) => (
                       <span key={idx} className="bg-background px-3 py-1 rounded text-sm font-mono">
@@ -99,7 +109,9 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
               {/* Specifications */}
               {product.specifications && Object.keys(product.specifications).length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-3">Specifications</h3>
+                  <h3 className="font-semibold mb-3">
+                    <LocalizedText hu="Műszaki adatok" en="Specifications" />
+                  </h3>
                   <div className="space-y-2">
                     {Object.entries(product.specifications).map(([key, value]) => (
                       <div key={key} className="flex justify-between text-sm">
@@ -114,7 +126,9 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
               {/* Add to Cart */}
               <div className="space-y-3">
                 <div className="flex items-center gap-4">
-                  <label className="text-sm font-medium">Quantity:</label>
+                  <label className="text-sm font-medium">
+                    <LocalizedText hu="Mennyiség:" en="Quantity:" />
+                  </label>
                   <div className="flex items-center border border-border rounded-lg">
                     <button
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -144,7 +158,7 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
                   className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
                 >
                   <ShoppingCart className="w-5 h-5 mr-2" />
-                  Add to Cart
+                  <LocalizedText hu="Kosárba helyezés" en="Add to Cart" />
                 </Button>
               </div>
 
@@ -153,15 +167,23 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
                 <div className="flex items-center gap-3">
                   <Zap className="w-5 h-5 text-accent" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Fast Shipping</p>
-                    <p className="font-semibold">Worldwide</p>
+                    <p className="text-xs text-muted-foreground">
+                      <LocalizedText hu="Gyors szállítás" en="Fast Shipping" />
+                    </p>
+                    <p className="font-semibold">
+                      <LocalizedText hu="Nemzetközi kiszállítás" en="Worldwide" />
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <TrendingUp className="w-5 h-5 text-accent" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Best Prices</p>
-                    <p className="font-semibold">Guaranteed</p>
+                    <p className="text-xs text-muted-foreground">
+                      <LocalizedText hu="Versenyképes árak" en="Best Prices" />
+                    </p>
+                    <p className="font-semibold">
+                      <LocalizedText hu="Garancia mellett" en="Guaranteed" />
+                    </p>
                   </div>
                 </div>
               </div>
@@ -171,7 +193,9 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
           {/* Suppliers Section */}
           {suppliers.length > 0 && (
             <div className="border-t border-border pt-12">
-              <h2 className="text-2xl font-bold mb-6">Available from Suppliers</h2>
+              <h2 className="text-2xl font-bold mb-6">
+                <LocalizedText hu="Elérhető beszállítóktól" en="Available from Suppliers" />
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {suppliers.map((supplier) => (
                   <div key={supplier.id} className="p-6 bg-card border border-border rounded-lg">
@@ -192,9 +216,14 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
 
           {/* Related Products */}
           <div className="border-t border-border pt-12 mt-12">
-            <h2 className="text-2xl font-bold mb-6">Related Products</h2>
+            <h2 className="text-2xl font-bold mb-6">
+              <LocalizedText hu="Kapcsolódó termékek" en="Related Products" />
+            </h2>
             <p className="text-muted-foreground">
-              Related products would appear here - linked by category, brand, or compatibility
+              <LocalizedText
+                hu="Itt jelennek meg a kapcsolódó termékek – kategória, márka vagy kompatibilitás alapján összekapcsolva."
+                en="Related products would appear here - linked by category, brand, or compatibility."
+              />
             </p>
           </div>
     </div>

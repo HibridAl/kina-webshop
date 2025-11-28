@@ -7,6 +7,7 @@ import type { Brand } from '@/lib/types';
 import { ChevronRight } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 export function BrandsGrid() {
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -61,15 +62,19 @@ export function BrandsGrid() {
               <p className="text-sm text-muted-foreground mb-4">{brand.description}</p>
             )}
             <div className="flex items-center text-accent font-semibold text-sm">
-              Brand overview <ChevronRight className="w-4 h-4 ml-1" />
+              <LocalizedText hu="Márkaáttekintés" en="Brand overview" /> <ChevronRight className="w-4 h-4 ml-1" />
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="secondary" size="sm">
-              <Link href={`/brands/${brand.id}`}>Brand summary</Link>
+              <Link href={`/brands/${brand.id}`}>
+                <LocalizedText hu="Márkaösszefoglaló" en="Brand summary" />
+              </Link>
             </Button>
             <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-              <Link href={`/brands/${brand.id}/models`}>Browse models</Link>
+              <Link href={`/brands/${brand.id}/models`}>
+                <LocalizedText hu="Modellek böngészése" en="Browse models" />
+              </Link>
             </Button>
           </div>
         </article>

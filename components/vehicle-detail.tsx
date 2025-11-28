@@ -13,6 +13,7 @@ import {
   getVehicleById,
 } from '@/lib/db';
 import type { Brand, Model, Product, Vehicle } from '@/lib/types';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 interface VehicleDetailProps {
   vehicleId: string;
@@ -83,7 +84,10 @@ export function VehicleDetail({ vehicleId }: VehicleDetailProps) {
   if (!vehicle) {
     return (
       <div className="rounded-lg border border-border p-6 text-sm text-muted-foreground">
-        Vehicle not found. Please return to the previous page and choose another model.
+        <LocalizedText
+          hu="A jármű nem található. Lépjen vissza az előző oldalra, és válasszon egy másik modellt."
+          en="Vehicle not found. Please return to the previous page and choose another model."
+        />
       </div>
     );
   }
@@ -105,7 +109,7 @@ export function VehicleDetail({ vehicleId }: VehicleDetailProps) {
               {model.name}
             </Link>
           )}{' '}
-          / Vehicle
+          <LocalizedText hu="/ Jármű" en="/ Vehicle" />
         </p>
         <h1 className="text-3xl font-bold">
           {vehicle.variant_name || vehicle.engine_type || 'Vehicle'}
@@ -115,11 +119,15 @@ export function VehicleDetail({ vehicleId }: VehicleDetailProps) {
         </p>
         <div className="flex flex-wrap gap-3 pt-2">
           <Button asChild size="sm">
-            <Link href={`/products?vehicleId=${vehicle.id}`}>Shop compatible parts</Link>
+            <Link href={`/products?vehicleId=${vehicle.id}`}>
+              <LocalizedText hu="Kompatibilis alkatrészek megtekintése" en="Shop compatible parts" />
+            </Link>
           </Button>
           {model && (
             <Button asChild size="sm" variant="outline">
-              <Link href={`/brands/${model.brand_id}/models/${model.id}`}>Back to model</Link>
+              <Link href={`/brands/${model.brand_id}/models/${model.id}`}>
+                <LocalizedText hu="Vissza a modellhez" en="Back to model" />
+              </Link>
             </Button>
           )}
         </div>
@@ -138,15 +146,24 @@ export function VehicleDetail({ vehicleId }: VehicleDetailProps) {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold">Compatible Products</h2>
+          <h2 className="text-xl font-semibold">
+            <LocalizedText hu="Kompatibilis termékek" en="Compatible Products" />
+          </h2>
           {compatibleIds.length > 0 && (
-            <span className="text-sm text-muted-foreground">{compatibleIds.length} matches</span>
+            <span className="text-sm text-muted-foreground">
+              <LocalizedText
+                hu={`${compatibleIds.length} egyezés`}
+                en={`${compatibleIds.length} matches`}
+              />
+            </span>
           )}
         </div>
         {compatibleIds.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            We don&apos;t have compatibility data for this vehicle yet. Try selecting another model or
-            contact our team for assistance.
+            <LocalizedText
+              hu="Ehhez a járműhöz még nincs kompatibilitási adatunk. Próbáljon ki egy másik modellt, vagy vegye fel a kapcsolatot csapatunkkal segítségért."
+              en="We don’t have compatibility data for this vehicle yet. Try selecting another model or contact our team for assistance."
+            />
           </p>
         ) : (
           <ProductGrid products={products} loading={false} />

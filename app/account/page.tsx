@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getBrowserClient } from '@/lib/supabase';
 import { Loader2, LogOut, Package, ShieldCheck, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 const CTA_LINKS = [
   {
@@ -91,18 +92,31 @@ export default function AccountPage() {
       <main className="flex-1 py-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           <section className="rounded-2xl bg-gradient-to-br from-primary/10 via-accent/10 to-transparent border border-border/60 p-8">
-            <p className="text-sm uppercase tracking-wide text-muted-foreground">Account</p>
-            <h1 className="text-3xl md:text-4xl font-bold mt-2">Welcome back, {greeting || 'AutoHub partner'}!</h1>
+            <p className="text-sm uppercase tracking-wide text-muted-foreground">
+              <LocalizedText hu="Fiók" en="Account" />
+            </p>
+            <h1 className="text-3xl md:text-4xl font-bold mt-2">
+              <LocalizedText
+                hu={`Üdv újra itt, ${greeting || 'AutoHub partner'}!`}
+                en={`Welcome back, ${greeting || 'AutoHub partner'}!`}
+              />
+            </h1>
             <p className="text-muted-foreground mt-3 max-w-2xl">
-              Manage your MG, BYD, and Omoda programs from one dashboard. Review new orders, keep vehicle profiles handy,
-              and update billing preferences before your next checkout.
+              <LocalizedText
+                hu="Kezelje MG, BYD és Omoda programjait egyetlen irányítópulton. Nézze át új rendeléseit, tartsa kéznél a gyakran szervizelt járműveket, és frissítse számlázási beállításait a következő fizetés előtt."
+                en="Manage your MG, BYD, and Omoda programs from one dashboard. Review new orders, keep vehicle profiles handy, and update billing preferences before your next checkout."
+              />
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button asChild>
-                <Link href="/account/orders">Go to orders</Link>
+                <Link href="/account/orders">
+                  <LocalizedText hu="Ugrás a rendelésekhez" en="Go to orders" />
+                </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/products">Continue shopping</Link>
+                <Link href="/products">
+                  <LocalizedText hu="Vásárlás folytatása" en="Continue shopping" />
+                </Link>
               </Button>
             </div>
           </section>

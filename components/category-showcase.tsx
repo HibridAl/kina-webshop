@@ -7,6 +7,7 @@ import { getCategories } from '@/lib/db';
 import type { Category } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 const categoryIcons: Record<string, ReactNode> = {
   'Maintenance & Fluids': <Package className="h-6 w-6" />,
@@ -50,17 +51,24 @@ export function CategoryShowcase() {
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 pb-10 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Browse by system</p>
-            <h2 className="mt-4 text-3xl font-semibold leading-tight md:text-4xl">Drill into a subsystem in two taps.</h2>
+            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+              <LocalizedText hu="Böngészés rendszerenként" en="Browse by system" />
+            </p>
+            <h2 className="mt-4 text-3xl font-semibold leading-tight md:text-4xl">
+              <LocalizedText hu="Merüljön el bármelyik járműrendszerben két kattintással." en="Drill into a subsystem in two taps." />
+            </h2>
             <p className="mt-3 max-w-2xl text-muted-foreground">
-              These curated stacks merge sensors, harnesses, service kits, and consumables per vehicle stage. Use them as shortcuts instead of endless filter toggles.
+              <LocalizedText
+                hu="A gondosan összeállított csomagok érzékelőket, kábelkorbácsokat, szervizkészleteket és fogyóanyagokat kapcsolnak össze járműéletszakaszok szerint – így végtelen szűrőkapcsolgatás helyett kész útvonalakat használhat."
+                en="These curated stacks merge sensors, harnesses, service kits, and consumables per vehicle stage. Use them as shortcuts instead of endless filter toggles."
+              />
             </p>
           </div>
           <Link
             href="/products"
             className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground transition hover:border-primary"
           >
-            See full catalog
+            <LocalizedText hu="Teljes katalógus megtekintése" en="See full catalog" />
             <ArrowUpRight className="h-4 w-4" />
           </Link>
         </div>
@@ -90,11 +98,16 @@ export function CategoryShowcase() {
                 <div className="mt-6 space-y-2">
                   <h3 className="text-xl font-semibold">{category.name}</h3>
                   <p className="text-sm text-muted-foreground line-clamp-3">
-                    {category.description ?? 'Mix of OEM and aftermarket components validated against our compatibility graph.'}
+                    {category.description ?? (
+                      <LocalizedText
+                        hu="OEM és minőségi utángyártott alkatrészek keveréke, a mi kompatibilitási gráfunk alapján validálva."
+                        en="Mix of OEM and aftermarket components validated against our compatibility graph."
+                      />
+                    )}
                   </p>
                 </div>
                 <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary">
-                  Dive in
+                  <LocalizedText hu="Részletek megtekintése" en="Dive in" />
                   <ArrowUpRight className="h-4 w-4" />
                 </div>
               </Link>

@@ -4,9 +4,9 @@ import { VehicleOilSelector } from '@/components/vehicle-oil-selector';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Oil & Fluid Selector - AutoHub',
+  title: 'Olaj- és folyadékválasztó – AutoHub',
   description:
-    'Select your Chinese vehicle (MG, BYD, Omoda, Geely, Haval) to see recommended engine oils and fluids based on manufacturer data.',
+    'Válassza ki kínai gyártmányú járművét (MG, BYD, Omoda, Geely, Haval), és nézze meg a gyártói adatok alapján ajánlott motorolajokat és egyéb folyadékokat, kapacitásokkal és csereintervallumokkal.',
 };
 
 export default function OilSelectorPage() {

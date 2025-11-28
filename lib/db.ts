@@ -1,3 +1,4 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getBrowserClient, getServerClient } from './supabase';
 import {
   mockBrands,
@@ -7,6 +8,7 @@ import {
   mockVehicles,
   mockVehicleCompatibility,
 } from './mock-data';
+import { FALLBACK_SHIPPING_METHODS, type ShippingMethod } from './pricing';
 import type {
   Brand,
   Model,
@@ -51,13 +53,151 @@ let supabaseHealthy = true;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export type CheckoutLineItemInput = {
+  productId: string;
+  quantity: number;
+  name?: string;
+  price?: number;
+};
+
+type ResolvedCheckoutItem = {
+  productId: string;
+  quantity: number;
+  name: string;
+  price: number;
+};
+
+const DEFAULT_CURRENCY = 'usd';
+
 function looksLikeUuid(value?: string) {
   return !!value && UUID_REGEX.test(value);
+}
+
+let serviceClient: SupabaseClient | null = null;
+
+function getServiceClient() {
+  if (typeof window !== 'undefined') return null;
+  if (serviceClient) return serviceClient;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    console.warn('[AutoHub] Missing Supabase URL or service key for server-side operations.');
+    return null;
+  }
+  serviceClient = createClient(url, key, { auth: { persistSession: false } });
+  return serviceClient;
 }
 
 function canUseSupabase(): boolean {
   if (typeof window === 'undefined') return false;
   return isSupabaseConfigured() && supabaseHealthy;
+}
+
+function fallbackProductsByIds(ids: string[]) {
+  if (!ids?.length) return [] as Product[];
+  return mockProducts.filter((p) => ids.includes(p.id));
+}
+
+function mapShippingMethodRow(record: Record<string, any>): ShippingMethod {
+  const fallbackId = record?.code ? `shipping-${record.code}` : 'shipping-default';
+  return {
+    id: record?.id ?? record?.code ?? fallbackId,
+    code: record?.code ?? null,
+    name: record?.name ?? 'Shipping',
+    description: record?.description ?? null,
+    deliveryEstimate: record?.delivery_estimate ?? record?.duration ?? null,
+    price: Number(record?.price ?? 0),
+    currency: record?.currency ?? DEFAULT_CURRENCY,
+    isExpress: Boolean(record?.is_express),
+    isDefault: Boolean(record?.is_default),
+    region: record?.region ?? null,
+    active: record?.active ?? true,
+  };
+}
+
+async function getAccessToken() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const client = getBrowserClient();
+    const { data } = await client.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch (error) {
+    console.error('Failed to obtain Supabase session token:', error);
+    return null;
+  }
+}
+
+async function cartApiRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: Record<string, any>) {
+  if (typeof window === 'undefined') return null;
+  const token = await getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated.');
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+  };
+
+  let payload: BodyInit | undefined;
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    payload = JSON.stringify(body);
+  }
+
+  const response = await fetch('/api/cart', {
+    method,
+    headers,
+    body: payload,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || 'Cart API error');
+  }
+
+  if (response.status === 204) return null;
+  return (await response.json()) as T;
+}
+
+export async function resolveCheckoutItems(items: CheckoutLineItemInput[]): Promise<ResolvedCheckoutItem[]> {
+  if (!items?.length) return [];
+  const sanitized = items
+    .filter((item) => item.productId && item.quantity > 0)
+    .map((item) => ({ ...item, quantity: Math.max(1, item.quantity) }));
+
+  if (!sanitized.length) return [];
+  const ids = sanitized.map((item) => item.productId);
+
+  let products: Product[] = [];
+
+  if (typeof window === 'undefined') {
+    const client = getServiceClient();
+    if (client) {
+      try {
+        const { data, error } = await client.from('products').select('id,name,price').in('id', ids);
+        if (error) throw error;
+        products = (data as Product[]) ?? [];
+      } catch (error) {
+        console.error('Error resolving checkout items via server client:', error);
+        products = fallbackProductsByIds(ids);
+      }
+    } else {
+      products = fallbackProductsByIds(ids);
+    }
+  } else {
+    products = await getProductsByIds(ids);
+  }
+
+  return sanitized.map((item) => {
+    const product = products.find((p) => p.id === item.productId);
+    const rawPrice = product?.price ?? item.price ?? 0;
+    return {
+      productId: item.productId,
+      quantity: item.quantity,
+      name: product?.name ?? item.name ?? 'Item',
+      price: typeof rawPrice === 'number' ? rawPrice : Number(rawPrice) || 0,
+    } satisfies ResolvedCheckoutItem;
+  });
 }
 
 // Product queries
@@ -625,20 +765,54 @@ export async function getSuppliers() {
   }
 }
 
+const SHIPPING_METHOD_COLUMNS =
+  'id, code, name, description, price, currency, delivery_estimate, is_express, is_default, region, active';
+
+async function fetchShippingMethods(client: SupabaseClient) {
+  const { data, error } = await client
+    .from('shipping_methods')
+    .select(SHIPPING_METHOD_COLUMNS)
+    .eq('active', true)
+    .order('price', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapShippingMethodRow);
+}
+
+export async function getShippingMethods(): Promise<ShippingMethod[]> {
+  try {
+    if (!canUseSupabase()) return FALLBACK_SHIPPING_METHODS;
+    const client = getBrowserClient();
+    const methods = await fetchShippingMethods(client);
+    return methods.length ? methods : FALLBACK_SHIPPING_METHODS;
+  } catch (error) {
+    console.error('Error fetching shipping methods:', error);
+    return FALLBACK_SHIPPING_METHODS;
+  }
+}
+
+export async function getServerShippingMethods(): Promise<ShippingMethod[]> {
+  try {
+    const client = getServiceClient();
+    if (!client) return FALLBACK_SHIPPING_METHODS;
+    const methods = await fetchShippingMethods(client);
+    return methods.length ? methods : FALLBACK_SHIPPING_METHODS;
+  } catch (error) {
+    console.error('Error fetching shipping methods (server):', error);
+    return FALLBACK_SHIPPING_METHODS;
+  }
+}
+
 // Cart queries
 export async function getCartItems(userId: string) {
   try {
-    if (!canUseSupabase()) return [];
+    if (!canUseSupabase()) {
+      return [];
+    }
 
-    const client = getBrowserClient();
-    const { data, error } = await client
-      .from('cart_items')
-      .select('id, product_id, quantity, price_at_add, name_snapshot, products(name, price, image_url)')
-      .eq('user_id', userId);
-    if (error) throw error;
-    return (data as CartItem[]) || [];
+    const response = await cartApiRequest<{ items: CartItem[] }>('GET');
+    return response?.items ?? [];
   } catch (error) {
-    console.error('Error fetching cart items:', error);
+    console.error('getCartItems: Error fetching cart items:', error);
     return [];
   }
 }
@@ -650,36 +824,18 @@ export async function addToCart(
   snapshot?: { price?: number; name?: string }
 ) {
   try {
-    if (!canUseSupabase()) return null;
-
-    const client = getBrowserClient();
-    const { data: existing } = await client
-      .from('cart_items')
-      .select('id, quantity')
-      .eq('user_id', userId)
-      .eq('product_id', productId)
-      .maybeSingle();
-
-    if (existing) {
-      const newQuantity = (existing.quantity ?? 0) + quantity;
-      await client
-        .from('cart_items')
-        .update({ quantity: newQuantity })
-        .eq('id', existing.id);
-      return existing;
+    if (!canUseSupabase()) {
+      return null;
     }
 
-    const { data, error } = await client.from('cart_items').insert({
-      user_id: userId,
-      product_id: productId,
+    await cartApiRequest('POST', {
+      productId,
       quantity,
-      price_at_add: snapshot?.price ?? null,
-      name_snapshot: snapshot?.name ?? null,
+      snapshot,
     });
-    if (error) throw error;
-    return data;
+    return null;
   } catch (error) {
-    console.error('Error adding to cart:', error);
+    console.error('addToCart: Error adding to cart:', error);
     return null;
   }
 }
@@ -692,12 +848,7 @@ export async function updateCartItemQuantity(
   try {
     if (!canUseSupabase()) return;
 
-    const client = getBrowserClient();
-    await client
-      .from('cart_items')
-      .update({ quantity })
-      .eq('user_id', userId)
-      .eq('product_id', productId);
+    await cartApiRequest('PATCH', { productId, quantity });
   } catch (error) {
     console.error('Error updating cart item:', error);
   }
@@ -707,12 +858,7 @@ export async function removeFromCart(userId: string, productId: string) {
   try {
     if (!canUseSupabase()) return;
 
-    const client = getBrowserClient();
-    await client
-      .from('cart_items')
-      .delete()
-      .eq('user_id', userId)
-      .eq('product_id', productId);
+    await cartApiRequest('DELETE', { productId });
   } catch (error) {
     console.error('Error removing from cart:', error);
   }
@@ -722,8 +868,7 @@ export async function clearCartItems(userId: string) {
   try {
     if (!canUseSupabase()) return;
 
-    const client = getBrowserClient();
-    await client.from('cart_items').delete().eq('user_id', userId);
+    await cartApiRequest('DELETE', { clearAll: true });
   } catch (error) {
     console.error('Error removing from cart:', error);
   }
@@ -817,5 +962,120 @@ export async function getOrderItems(orderId: string) {
   } catch (error) {
     console.error('Error fetching order items:', error);
     return [];
+  }
+}
+
+interface StripeOrderPayload {
+  userId: string;
+  items: ResolvedCheckoutItem[];
+  amountTotal: number;
+  currency?: string;
+  shipping?: Record<string, any> | null;
+  billing?: Record<string, any> | null;
+  paymentIntentId: string;
+  sessionId: string;
+  paymentStatus?: string;
+  paymentMethod?: string | null;
+  metadata?: Record<string, any> | null;
+  receiptUrl?: string | null;
+  customerEmail?: string | null;
+  totals?: {
+    subtotal: number;
+    total: number;
+    shipping: number;
+    tax: number;
+    taxLabel?: string;
+    shippingMethodId?: string;
+    shippingMethodCode?: string;
+  };
+}
+
+export async function fulfillStripeOrder(payload: StripeOrderPayload) {
+  const client = getServiceClient();
+  if (!client) {
+    console.warn('[AutoHub] Unable to fulfill Stripe order: Supabase service client unavailable.');
+    return null;
+  }
+
+  if (!payload.userId) {
+    console.warn('[AutoHub] Stripe order missing user context.');
+    return null;
+  }
+
+  const transactionId = payload.paymentIntentId || payload.sessionId;
+  if (!transactionId) {
+    console.warn('[AutoHub] Stripe order missing transaction identifier.');
+    return null;
+  }
+
+  try {
+    const { data: existingPayment } = await client
+      .from('order_payments')
+      .select('order_id')
+      .eq('transaction_id', transactionId)
+      .maybeSingle();
+
+    if (existingPayment?.order_id) {
+      return { orderId: existingPayment.order_id };
+    }
+
+    const orderItems = payload.items ?? [];
+    if (!orderItems.length) {
+      console.warn('[AutoHub] Stripe order has no resolved items.');
+      return null;
+    }
+
+    const orderStatus = payload.paymentStatus === 'paid' ? 'paid' : 'pending';
+    const paymentStatus = payload.paymentStatus === 'paid' ? 'completed' : payload.paymentStatus ?? 'pending';
+
+    const { data: order, error: orderError } = await client
+      .from('orders')
+      .insert({
+        user_id: payload.userId,
+        total_amount: payload.amountTotal,
+        status: orderStatus,
+        shipping_address: payload.shipping ?? null,
+        billing_address: payload.billing ?? null,
+      })
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+
+    const itemsPayload = orderItems.map((item) => ({
+      order_id: order.id,
+      product_id: item.productId,
+      quantity: item.quantity,
+      price_at_purchase: item.price,
+    }));
+
+    const { error: orderItemsError } = await client.from('order_items').insert(itemsPayload);
+    if (orderItemsError) throw orderItemsError;
+
+    const paymentMetadata = {
+      ...(payload.metadata ?? {}),
+      totals: payload.totals ?? null,
+    };
+
+    const { error: paymentError } = await client.from('order_payments').insert({
+      order_id: order.id,
+      amount: payload.amountTotal,
+      currency: (payload.currency ?? DEFAULT_CURRENCY).toLowerCase(),
+      status: paymentStatus,
+      provider: 'stripe',
+      transaction_id: transactionId,
+      payment_method: payload.paymentMethod ?? 'card',
+      checkout_session_id: payload.sessionId,
+      receipt_url: payload.receiptUrl ?? null,
+      metadata: paymentMetadata,
+      customer_email: payload.customerEmail ?? null,
+    });
+
+    if (paymentError) throw paymentError;
+
+    return { orderId: order.id };
+  } catch (error) {
+    console.error('Error fulfilling Stripe order:', error);
+    return null;
   }
 }

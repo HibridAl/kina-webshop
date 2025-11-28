@@ -1,3 +1,7 @@
+'use client';
+
+import { useLocale } from '@/hooks/use-locale';
+
 interface ProductsPaginationProps {
   currentPage: number;
   totalPages: number;
@@ -11,6 +15,9 @@ export function ProductsPagination({
   onPageChange,
   isLoading = false,
 }: ProductsPaginationProps) {
+  const { locale } = useLocale();
+  const prevLabel = locale === 'hu' ? 'Előző' : 'Previous';
+  const nextLabel = locale === 'hu' ? 'Következő' : 'Next';
   const pages = buildPages(currentPage, totalPages);
 
   return (
@@ -21,7 +28,7 @@ export function ProductsPagination({
         disabled={currentPage <= 1 || isLoading}
         onClick={() => onPageChange(currentPage - 1)}
       >
-        Previous
+        {prevLabel}
       </button>
       {pages.map((page, idx) =>
         page === 'ellipsis' ? (
@@ -50,7 +57,7 @@ export function ProductsPagination({
         disabled={currentPage >= totalPages || isLoading}
         onClick={() => onPageChange(currentPage + 1)}
       >
-        Next
+        {nextLabel}
       </button>
     </nav>
   );

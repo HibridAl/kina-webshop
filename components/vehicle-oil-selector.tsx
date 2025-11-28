@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { PostgrestError } from '@supabase/supabase-js';
+import { LocalizedText } from '@/components/ui/localized-text';
+import { useLocale } from '@/hooks/use-locale';
 
 type LoadState = 'idle' | 'loading' | 'error' | 'ready';
 
@@ -29,6 +31,7 @@ interface OilRecommendation {
 }
 
 export function VehicleOilSelector() {
+  const { locale } = useLocale();
   const [selectedMake, setSelectedMake] = useState<ChineseMake | null>(null);
   const [dataset, setDataset] = useState<OilSelectorDataset | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('idle');
@@ -154,17 +157,21 @@ export function VehicleOilSelector() {
     <section className="py-12 md:py-16">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Select Your Vehicle</h2>
+          <h2 className="text-3xl font-bold mb-2">
+            <LocalizedText hu="Válassza ki járművét" en="Select Your Vehicle" />
+          </h2>
           <p className="text-muted-foreground">
-            Choose your Chinese brand, model, and engine to see recommended oils and
-            lubricants. This uses the manufacturer&apos;s official intervals and capacities.
+            <LocalizedText
+              hu="Válassza ki a kínai márkát, modellt és motortípust, hogy megtekinthesse a gyártó által javasolt olajokat és kenőanyagokat. Az ajánlások a hivatalos csereperiódusokra és kapacitásokra épülnek."
+              en="Choose your Chinese brand, model, and engine to see recommended oils and lubricants. This uses the manufacturer’s official intervals and capacities."
+            />
           </p>
         </div>
 
         {/* Step 1: Brand */}
         <div className="mb-8">
           <h3 className="text-sm font-semibold mb-3 uppercase tracking-wide text-muted-foreground">
-            1. Brand
+            <LocalizedText hu="1. Márka" en="1. Brand" />
           </h3>
           <div className="flex flex-wrap gap-2">
             {CHINESE_MAKES.map((make) => (
@@ -185,25 +192,25 @@ export function VehicleOilSelector() {
           <div className="mb-8">
             <Skeleton className="h-32" />
             <p className="mt-3 text-sm text-muted-foreground">
-              Loading data for {selectedMake}...
+              <LocalizedText
+                hu={`Adatok betöltése ehhez a márkához: ${selectedMake}…`}
+                en={`Loading data for ${selectedMake}...`}
+              />
             </p>
           </div>
         )}
 
         {selectedMake && loadState === 'error' && (
           <div className="mb-8 border border-destructive/30 bg-destructive/10 rounded-lg p-4 text-sm text-destructive">
-            {errorMessage || 'Failed to load oil selector data.'}
+            <LocalizedText
+              hu="Nem sikerült betölteni az olajválasztó adatait."
+              en={errorMessage || 'Failed to load oil selector data.'}
+            />
             <p className="mt-2 text-destructive/90">
-              Ensure the Supabase table{' '}
-              <code className="px-1 py-0.5 rounded bg-background border border-border text-xs">
-                oil_recommendations
-              </code>{' '}
-              exists and has data. Run{' '}
-              <code className="px-1 py-0.5 rounded bg-background border border-border text-xs">
-                node scripts/ingest-autok-to-supabase.cjs
-              </code>{' '}
-              after setting <code>AUTOK_PATH</code> so the MG/BYD/Omoda/Geely/Haval rows are ingested from
-              <code>autok.txt</code>.
+              <LocalizedText
+                hu="Ellenőrizze, hogy az „oil_recommendations” tábla létezik-e a Supabase-ben, és tartalmazza-e az MG/BYD/Omoda/Geely/Haval sorokat."
+                en="Ensure the “oil_recommendations” table exists in Supabase and includes the MG/BYD/Omoda/Geely/Haval rows."
+              />
             </p>
           </div>
         )}
@@ -212,24 +219,35 @@ export function VehicleOilSelector() {
         {selectedMake && loadState === 'ready' && (
           <div className="mb-8 space-y-4">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              2. Model
+              <LocalizedText hu="2. Modell" en="2. Model" />
             </h3>
             {models.length > 0 && (
               <input
                 type="text"
                 value={modelSearch}
                 onChange={(e) => setModelSearch(e.target.value)}
-                placeholder="Search models"
+                placeholder={locale === 'hu' ? 'Modellek keresése' : 'Search models'}
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
               />
             )}
             {models.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No models found for this brand yet.
+                <LocalizedText hu="Ehhez a márkához egyelőre nincs elérhető modell." en="No models found for this brand yet." />
               </p>
             ) : filteredModels.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No models match “{modelSearch}”. Try a different query.
+                <LocalizedText
+                  hu={
+                    <>
+                      Egyetlen modell sem felel meg a következő keresésnek: „{modelSearch}”. Próbáljon meg másik kifejezést.
+                    </>
+                  }
+                  en={
+                    <>
+                      No models match “{modelSearch}”. Try a different query.
+                    </>
+                  }
+                />
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto border border-border rounded-lg p-3 bg-card">
@@ -259,11 +277,11 @@ export function VehicleOilSelector() {
         {selectedMake && selectedModelKey && loadState === 'ready' && (
           <div className="mb-8">
             <h3 className="text-sm font-semibold mb-3 uppercase tracking-wide text-muted-foreground">
-              3. Engine / Type
+              <LocalizedText hu="3. Motor / kivitel" en="3. Engine / Type" />
             </h3>
             {typesForSelectedModel.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No engine types found for this model.
+                <LocalizedText hu="Ehhez a modellhez egyelőre nincs elérhető motortípus." en="No engine types found for this model." />
               </p>
             ) : (
               <div className="space-y-2">
@@ -293,7 +311,7 @@ export function VehicleOilSelector() {
         {selectedTypeRecord && systems.length > 0 && (
           <div className="mt-10 border-t border-border pt-8">
             <h3 className="text-xl font-bold mb-4">
-              Recommended Fluids & Capacities
+              <LocalizedText hu="Ajánlott folyadékok és kapacitások" en="Recommended Fluids & Capacities" />
             </h3>
             <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
@@ -301,7 +319,10 @@ export function VehicleOilSelector() {
                   {selectedTypeRecord.vehicle.type}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Browse compatible parts filtered by this engine.
+                  <LocalizedText
+                    hu="Tekintse meg a motorhoz szűrt kompatibilis alkatrészeket."
+                    en="Browse compatible parts filtered by this engine."
+                  />
                 </p>
               </div>
               <Button asChild variant="default">
@@ -310,13 +331,24 @@ export function VehicleOilSelector() {
                     selectedTypeRecord.vehicle.type
                   )}`}
                 >
-                  Shop compatible parts
+                  <LocalizedText hu="Kompatibilis alkatrészek böngészése" en="Shop compatible parts" />
                 </Link>
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mb-6">
-              Based on manufacturer data for{' '}
-              <span className="font-semibold">{selectedTypeRecord.vehicle.type}</span>.
+              <LocalizedText
+                hu={
+                  <>
+                    A(z) {selectedTypeRecord.vehicle.type} kivitel gyártói adatai alapján.
+                  </>
+                }
+                en={
+                  <>
+                    Based on manufacturer data for{' '}
+                    <span className="font-semibold">{selectedTypeRecord.vehicle.type}</span>.
+                  </>
+                }
+              />
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {systems.map(([systemName, system]) => (
@@ -329,7 +361,7 @@ export function VehicleOilSelector() {
                   {system.capacities && system.capacities.length > 0 && (
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-1">
-                        Capacities
+                        <LocalizedText hu="Kapacitások" en="Capacities" />
                       </p>
                       <ul className="text-xs space-y-0.5">
                         {system.capacities.map((c) => (
@@ -345,7 +377,18 @@ export function VehicleOilSelector() {
                         ([usageName, usageConfig]) => (
                           <div key={usageName} className="border-t border-border pt-3">
                             <p className="text-xs font-medium mb-1">
-                              Use: {usageName}
+                              <LocalizedText
+                                hu={
+                                  <>
+                                    Felhasználás: {usageName}
+                                  </>
+                                }
+                                en={
+                                  <>
+                                    Use: {usageName}
+                                  </>
+                                }
+                              />
                             </p>
                             {usageConfig.interval && (
                               <ul className="text-xs text-muted-foreground space-y-0.5 mb-2">
@@ -357,7 +400,7 @@ export function VehicleOilSelector() {
                             {usageConfig.products && (
                               <div className="space-y-2">
                                 <p className="text-xs font-medium text-muted-foreground">
-                                  Recommended products
+                                  <LocalizedText hu="Ajánlott termékek" en="Recommended products" />
                                 </p>
                                 <div className="flex flex-wrap gap-2">
                                   {Object.entries(usageConfig.products).map(

@@ -69,6 +69,23 @@ CREATE TABLE IF NOT EXISTS supplier_import_runs (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Shipping methods
+CREATE TABLE IF NOT EXISTS shipping_methods (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  price NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  currency VARCHAR(3) DEFAULT 'usd',
+  delivery_estimate VARCHAR(120),
+  is_express BOOLEAN DEFAULT FALSE,
+  is_default BOOLEAN DEFAULT FALSE,
+  region VARCHAR(50),
+  active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Create products table
 CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -164,6 +181,12 @@ CREATE TABLE IF NOT EXISTS order_payments (
   status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'completed', 'failed', 'refunded'
   provider VARCHAR(50), -- 'stripe', 'mock', 'alipay'
   transaction_id VARCHAR(255),
+  currency VARCHAR(10) DEFAULT 'usd',
+  payment_method VARCHAR(50),
+  checkout_session_id VARCHAR(255),
+  receipt_url TEXT,
+  metadata JSONB,
+  customer_email TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -175,6 +198,7 @@ ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE supplier_import_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shipping_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_supplier_mapping ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicle_product_compatibility ENABLE ROW LEVEL SECURITY;
@@ -193,6 +217,10 @@ CREATE POLICY "Products are readable by all" ON products FOR SELECT USING (true)
 CREATE POLICY "Product supplier mapping readable by all" ON product_supplier_mapping FOR SELECT USING (true);
 CREATE POLICY "Vehicle compatibility readable by all" ON vehicle_product_compatibility FOR SELECT USING (true);
 CREATE POLICY "Supplier import runs readable by all" ON supplier_import_runs FOR SELECT USING (true);
+CREATE POLICY "Shipping methods readable by all" ON shipping_methods FOR SELECT USING (true);
+CREATE POLICY "Users read own profile" ON users FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users insert own profile" ON users FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users update own profile" ON users FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 -- RLS Policies: Users can only see their own cart and orders
 CREATE POLICY "Users can read own cart" ON cart_items FOR SELECT USING (auth.uid() = user_id);

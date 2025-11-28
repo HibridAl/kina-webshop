@@ -8,6 +8,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { ensureUserProfile } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 export default function AuthLoginPage() {
   const router = useRouter();
@@ -76,9 +77,14 @@ export default function AuthLoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8 space-y-2">
-          <h1 className="text-3xl font-bold">Sign in to AutoHub</h1>
+          <h1 className="text-3xl font-bold">
+            <LocalizedText hu="Jelentkezzen be AutoHub fiókjába" en="Sign in to AutoHub" />
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Access your saved vehicles, cart, and order history.
+            <LocalizedText
+              hu="Érje el elmentett járműveit, kosarát és rendelési előzményeit egy biztonságos felületen."
+              en="Access your saved vehicles, cart, and order history."
+            />
           </p>
         </div>
 

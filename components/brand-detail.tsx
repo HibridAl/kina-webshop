@@ -7,6 +7,7 @@ import type { Brand, Model } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronRight } from 'lucide-react';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 const brandLogoMap: Record<string, string> = {
   MG: '/CarBrands/mg.png',
@@ -49,7 +50,16 @@ export function BrandDetail({ brandId }: { brandId: string }) {
   }, [brandId]);
 
   if (loading) return <Skeleton className="h-96" />;
-  if (!brand) return <div>Brand not found</div>;
+  if (!brand) {
+    return (
+      <div className="rounded-xl border border-border/70 bg-card/80 p-8 text-center text-sm text-muted-foreground">
+        <LocalizedText
+          hu="A márka nem található. Lépjen vissza, és válasszon egy másik gyártót."
+          en="Brand not found. Please go back and pick another manufacturer."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="py-12 md:py-16">
@@ -74,17 +84,23 @@ export function BrandDetail({ brandId }: { brandId: string }) {
           )}
           <div className="flex flex-wrap gap-3">
             <Button asChild size="sm">
-              <Link href={`/brands/${brandId}/models`}>View all models</Link>
+              <Link href={`/brands/${brandId}/models`}>
+                <LocalizedText hu="Összes modell megtekintése" en="View all models" />
+              </Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href={`/brands/${brandId}`}>Brand overview</Link>
+              <Link href={`/brands/${brandId}`}>
+                <LocalizedText hu="Márkaáttekintés" en="Brand overview" />
+              </Link>
             </Button>
           </div>
         </div>
 
         {/* Models */}
         <div>
-          <h2 className="text-2xl font-bold mb-6">Available Models</h2>
+          <h2 className="text-2xl font-bold mb-6">
+            <LocalizedText hu="Elérhető modellek" en="Available Models" />
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {models.map((model) => (
               <Link
@@ -105,7 +121,7 @@ export function BrandDetail({ brandId }: { brandId: string }) {
                     <p className="text-sm text-muted-foreground mb-4">{model.description}</p>
                   )}
                   <div className="flex items-center text-accent font-semibold text-sm">
-                    Browse <ChevronRight className="w-4 h-4 ml-1" />
+                    <LocalizedText hu="Böngészés" en="Browse" /> <ChevronRight className="w-4 h-4 ml-1" />
                   </div>
                 </div>
               </Link>
