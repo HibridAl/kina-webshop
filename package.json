@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "test:search": "tsx scripts/test-search-suggest.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -78,6 +79,7 @@
     "stream-json": "^1.8.0",
     "tailwindcss": "^4.1.9",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "tw-animate-css": "1.3.3",
     "typescript": "^5"
   }

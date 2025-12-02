@@ -129,9 +129,20 @@ export function AdminOrderDetail({
               </div>
               <div>
                 <Label className="text-muted-foreground">Customer</Label>
-                <p className="font-medium">{order.users?.email || 'N/A'}</p>
-                {order.users?.company_name && (
-                   <p className="text-xs text-muted-foreground">{order.users.company_name}</p>
+                {order.users ? (
+                  <>
+                    <p className="font-medium">{order.users.email || 'N/A'}</p>
+                    {order.users.company_name && (
+                      <p className="text-xs text-muted-foreground">{order.users.company_name}</p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium">{order.guest_email || 'Guest'}</p>
+                    {order.guest_name && (
+                      <p className="text-xs text-muted-foreground">{order.guest_name}</p>
+                    )}
+                  </>
                 )}
               </div>
               <div>

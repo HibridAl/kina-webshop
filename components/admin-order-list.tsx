@@ -45,13 +45,28 @@ export function AdminOrderList({ orders, loading, onViewOrder }: AdminOrderListP
                 </td>
                 <td className="p-4">
                   <div className="flex flex-col">
-                    <span className="font-medium">
-                      {order.users?.email || 'Unknown'}
-                    </span>
-                    {order.users?.company_name && (
-                      <span className="text-xs text-muted-foreground">
-                        {order.users.company_name}
-                      </span>
+                    {order.users ? (
+                      <>
+                        <span className="font-medium">
+                          {order.users.email || 'Unknown User'}
+                        </span>
+                        {order.users.company_name && (
+                          <span className="text-xs text-muted-foreground">
+                            {order.users.company_name}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium">
+                          {order.guest_email || 'Guest'}
+                        </span>
+                        {order.guest_name && (
+                          <span className="text-xs text-muted-foreground">
+                            {order.guest_name}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </td>

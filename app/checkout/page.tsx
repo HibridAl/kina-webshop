@@ -6,7 +6,7 @@ import { Footer } from '@/components/footer';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/hooks/use-cart';
 import { useAuth } from '@/hooks/use-auth';
-import { createOrder, getShippingMethods } from '@/lib/db';
+import { createOrder, getShippingMethods, type GuestOrderDetails } from '@/lib/db';
 import Link from 'next/link';
 import { Loader2, CheckCircle2, Truck, CreditCard, ShieldCheck, Zap } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -43,6 +43,7 @@ export default function CheckoutPage() {
   const statusHandledRef = useRef<string | null>(null);
   const { items, total: subtotal, clearCart } = useCart();
   const { user, session, loading: userLoading } = useAuth();
+  const [isGuestCheckout, setIsGuestCheckout] = useState(false);
   const [step, setStep] = useState<'shipping' | 'method' | 'payment'>('shipping');
   const [loading, setLoading] = useState(false);
   const [bannerStatus, setBannerStatus] = useState<'success' | 'cancelled' | null>(null);
@@ -166,6 +167,19 @@ useEffect(() => {
     return billing;
   }, [billingSameAsShipping, billing, shipping]);
 
+  const guestDetails = useMemo<GuestOrderDetails | null>(() => {
+    if (user || !isGuestCheckout) return null;
+    const email = shipping.email?.trim();
+    if (!email) return null;
+    const fullName = `${shipping.firstName ?? ''} ${shipping.lastName ?? ''}`.trim();
+    const phone = shipping.phone?.trim();
+    return {
+      email,
+      name: fullName || undefined,
+      phone: phone || undefined,
+    };
+  }, [user, isGuestCheckout, shipping]);
+
   const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setShipping((prev) => ({ ...prev, [name]: value }));
@@ -204,31 +218,49 @@ const handleMethodSubmit = (e: React.FormEvent) => {
   setStep('payment');
 };
 
+  const ensureGuestContact = () => {
+    if (!user && isGuestCheckout && !guestDetails?.email) {
+      alert('Please provide an email address to checkout as a guest.');
+      return false;
+    }
+    return true;
+  };
+
   const handleStripeCheckout = async () => {
-    if (!user) {
+    if (!user && !isGuestCheckout) {
       alert('Please sign in to complete checkout.');
       return;
     }
 
-    if (!session?.access_token) {
+    if (!ensureGuestContact()) {
+      return;
+    }
+
+    if (user && !session?.access_token) {
       alert('Unable to verify your session. Please sign in again.');
       return;
     }
 
     setStripeLoading(true);
     try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const response = await fetch('/api/checkout/session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers,
         body: JSON.stringify({
           items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
           shipping: shippingAddress,
           billing: billingAddress,
           currency: 'usd',
           shippingMethodId,
+          guest: guestDetails ?? undefined,
         }),
       });
 
@@ -273,10 +305,15 @@ const handleMethodSubmit = (e: React.FormEvent) => {
         total,
       };
 
-      if (supabaseConfigured && user) {
-        const order = await createOrder(user.id, total, orderData.items, {
+      if (supabaseConfigured) {
+        if (!ensureGuestContact()) {
+          return;
+        }
+
+        const order = await createOrder(user?.id ?? null, total, orderData.items, {
           shipping: shippingAddress,
           billing: billingAddress,
+          guest: guestDetails,
         });
 
         if (!order) {
@@ -285,7 +322,7 @@ const handleMethodSubmit = (e: React.FormEvent) => {
 
         storeOrderReceipt({
           id: order.id,
-          ...orderData
+          ...orderData,
         });
         await clearCart();
         router.push(`/orders/${order.id}/confirmation`);
@@ -295,7 +332,7 @@ const handleMethodSubmit = (e: React.FormEvent) => {
       const mockOrderId = `ORD-${Date.now()}`;
       storeOrderReceipt({
         id: mockOrderId,
-        ...orderData
+        ...orderData,
       });
       await clearCart();
       router.push(`/orders/${mockOrderId}/confirmation`);
@@ -348,15 +385,15 @@ const handleMethodSubmit = (e: React.FormEvent) => {
             </div>
           )}
 
-          {!userLoading && !user && (
+          {!userLoading && !user && !isGuestCheckout && (
             <div className="max-w-lg mx-auto mb-10 rounded-lg border border-border bg-card p-6 space-y-3">
               <h2 className="text-xl font-semibold">
                 <LocalizedText hu="Jelentkezzen be a vásárláshoz" en="Sign in to checkout" />
               </h2>
               <p className="text-sm text-muted-foreground">
                 <LocalizedText
-                  hu="A rendelés leadásához fiók szükséges. Jelentkezzen be vagy regisztráljon ingyenesen."
-                  en="You need an account to place an order. Sign in or create a free account, then return here to finish checkout."
+                  hu="A rendelés leadásához fiók szükséges, vagy folytathatja vendégként is."
+                  en="You can sign in to save your details, or continue as a guest to checkout quickly."
                 />
               </p>
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
@@ -370,7 +407,12 @@ const handleMethodSubmit = (e: React.FormEvent) => {
                     <LocalizedText hu="Fiók létrehozása" en="Create account" />
                   </Link>
                 </Button>
-                <Button asChild variant="outline">
+                <Button variant="secondary" onClick={() => setIsGuestCheckout(true)}>
+                  <LocalizedText hu="Folytatás vendégként" en="Continue as guest" />
+                </Button>
+              </div>
+              <div className="pt-2">
+                <Button asChild variant="link" className="px-0 text-muted-foreground">
                   <Link href="/cart">
                     <LocalizedText hu="Vissza a kosárhoz" en="Back to cart" />
                   </Link>
@@ -379,7 +421,7 @@ const handleMethodSubmit = (e: React.FormEvent) => {
             </div>
           )}
 
-          {!userLoading && user && (
+          {!userLoading && (user || isGuestCheckout) && (
             <>
               {bannerStatus && (
                 <div

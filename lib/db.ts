@@ -22,6 +22,7 @@ import type {
   OrderItem,
   OrderPayment,
   CartItem,
+  OrderLifecycleStatus,
 } from './types';
 
 export type ProductSortOption = 'popularity' | 'newest' | 'price-asc' | 'price-desc';
@@ -67,10 +68,69 @@ type ResolvedCheckoutItem = {
   price: number;
 };
 
+export type GuestOrderDetails = {
+  email: string;
+  name?: string | null;
+  phone?: string | null;
+};
+
 const DEFAULT_CURRENCY = 'usd';
 
 function looksLikeUuid(value?: string) {
   return !!value && UUID_REGEX.test(value);
+}
+
+function normalizeText(value?: string | null) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+type CanonicalOrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'refunded';
+
+const ORDER_STATUS_ALIASES: Record<string, CanonicalOrderStatus> = {
+  confirmed: 'paid',
+  delivered: 'shipped',
+};
+
+const ORDER_STATUS_TRANSITIONS: Record<CanonicalOrderStatus, CanonicalOrderStatus[]> = {
+  pending: ['paid', 'cancelled'],
+  paid: ['processing', 'cancelled', 'refunded'],
+  processing: ['shipped', 'cancelled', 'refunded'],
+  shipped: ['cancelled', 'refunded'],
+  cancelled: [],
+  refunded: [],
+};
+
+function normalizeOrderStatus(status?: OrderLifecycleStatus | string | null): CanonicalOrderStatus | null {
+  if (!status) return null;
+  const lowered = status.toString().toLowerCase();
+  if ((Object.keys(ORDER_STATUS_TRANSITIONS) as CanonicalOrderStatus[]).includes(lowered as CanonicalOrderStatus)) {
+    return lowered as CanonicalOrderStatus;
+  }
+  const alias = ORDER_STATUS_ALIASES[lowered];
+  return alias ?? null;
+}
+
+export function canTransitionOrderStatus(
+  currentStatus: OrderLifecycleStatus | string | null | undefined,
+  nextStatus: CanonicalOrderStatus
+) {
+  const normalizedCurrent = normalizeOrderStatus(currentStatus);
+  if (!normalizedCurrent) {
+    return nextStatus === 'pending';
+  }
+  if (normalizedCurrent === nextStatus) {
+    return true;
+  }
+  return ORDER_STATUS_TRANSITIONS[normalizedCurrent]?.includes(nextStatus) ?? false;
+}
+
+export class OrderStatusTransitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OrderStatusTransitionError';
+  }
 }
 
 let serviceClient: SupabaseClient | null = null;
@@ -157,6 +217,10 @@ async function cartApiRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', bo
 
   if (response.status === 204) return null;
   return (await response.json()) as T;
+}
+
+function nowIso() {
+  return new Date().toISOString();
 }
 
 export async function resolveCheckoutItems(items: CheckoutLineItemInput[]): Promise<ResolvedCheckoutItem[]> {
@@ -875,20 +939,111 @@ export async function clearCartItems(userId: string) {
 }
 
 // Order queries
+async function orderHasPaymentWithStatus(client: SupabaseClient, orderId: string, status: OrderPayment['status']) {
+  const { data, error } = await client
+    .from('order_payments')
+    .select('id')
+    .eq('order_id', orderId)
+    .eq('status', status)
+    .limit(1);
+
+  if (error) throw error;
+  return Boolean(data && data.length);
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  nextStatusInput: OrderLifecycleStatus | string,
+  options?: { skipPaymentCheck?: boolean }
+) {
+  const client = getServiceClient();
+  if (!client) {
+    throw new Error('[AutoHub] updateOrderStatus requires server-side Supabase credentials.');
+  }
+
+  const nextStatus = normalizeOrderStatus(nextStatusInput);
+  if (!nextStatus) {
+    throw new OrderStatusTransitionError(`Unknown order status: ${nextStatusInput}`);
+  }
+
+  const { data: existingOrder, error } = await client
+    .from('orders')
+    .select('id,status, user_id, total_amount, shipping_address, billing_address, created_at, updated_at')
+    .eq('id', orderId)
+    .single();
+
+  if (error) throw error;
+
+  const normalizedCurrent = normalizeOrderStatus(existingOrder.status);
+  if (!canTransitionOrderStatus(normalizedCurrent, nextStatus)) {
+    throw new OrderStatusTransitionError(
+      `Invalid order status transition: ${normalizedCurrent ?? 'unknown'} → ${nextStatus}`
+    );
+  }
+
+  if (normalizedCurrent === nextStatus) {
+    return existingOrder as Order;
+  }
+
+  if (!options?.skipPaymentCheck) {
+    if (nextStatus === 'paid') {
+      const hasCompleted = await orderHasPaymentWithStatus(client, orderId, 'completed');
+      if (!hasCompleted) {
+        throw new OrderStatusTransitionError('Cannot mark order as paid without a completed payment record.');
+      }
+    }
+
+    if (nextStatus === 'refunded') {
+      const hasRefund = await orderHasPaymentWithStatus(client, orderId, 'refunded');
+      if (!hasRefund) {
+        throw new OrderStatusTransitionError('Cannot mark order as refunded without a recorded refund payment.');
+      }
+    }
+  }
+
+  const { data: updatedOrder, error: updateError } = await client
+    .from('orders')
+    .update({ status: nextStatus, updated_at: nowIso() })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (updateError) throw updateError;
+
+  return updatedOrder as Order;
+}
+
 export async function createOrder(
-  userId: string,
+  userId: string | null,
   totalAmount: number,
   items: Array<{ productId: string; quantity: number; price: number; name?: string }>,
-  options?: { shipping?: Record<string, any>; billing?: Record<string, any> }
+  options?: {
+    shipping?: Record<string, any>;
+    billing?: Record<string, any>;
+    guest?: GuestOrderDetails | null;
+  }
 ) {
   try {
     if (!canUseSupabase()) return null;
+
+    const guestDetails = options?.guest ?? null;
+    const guestEmail = normalizeText(guestDetails?.email ?? null);
+    const guestName = normalizeText(guestDetails?.name ?? null);
+    const guestPhone = normalizeText(guestDetails?.phone ?? null);
+    const isGuestOrder = !userId;
+
+    if (isGuestOrder && !guestEmail) {
+      throw new Error('Guest checkout requires a contact email.');
+    }
 
     const serverClient = await getServerClient();
     const { data: order, error: orderError } = await serverClient
       .from('orders')
       .insert({
-        user_id: userId,
+        user_id: userId ?? null,
+        guest_email: isGuestOrder ? guestEmail : null,
+        guest_name: isGuestOrder ? guestName : null,
+        guest_phone: isGuestOrder ? guestPhone : null,
         total_amount: totalAmount,
         status: 'pending',
         shipping_address: options?.shipping ?? null,
@@ -966,7 +1121,8 @@ export async function getOrderItems(orderId: string) {
 }
 
 interface StripeOrderPayload {
-  userId: string;
+  userId?: string | null;
+  guest?: GuestOrderDetails | null;
   items: ResolvedCheckoutItem[];
   amountTotal: number;
   currency?: string;
@@ -997,8 +1153,13 @@ export async function fulfillStripeOrder(payload: StripeOrderPayload) {
     return null;
   }
 
-  if (!payload.userId) {
-    console.warn('[AutoHub] Stripe order missing user context.');
+  const isGuestOrder = !payload.userId;
+  const guestEmail = normalizeText(payload.guest?.email ?? payload.customerEmail ?? null);
+  const guestName = normalizeText(payload.guest?.name ?? null);
+  const guestPhone = normalizeText(payload.guest?.phone ?? null);
+
+  if (isGuestOrder && !guestEmail) {
+    console.warn('[AutoHub] Stripe order missing user or guest contact details.');
     return null;
   }
 
@@ -1031,7 +1192,10 @@ export async function fulfillStripeOrder(payload: StripeOrderPayload) {
     const { data: order, error: orderError } = await client
       .from('orders')
       .insert({
-        user_id: payload.userId,
+        user_id: payload.userId ?? null,
+        guest_email: isGuestOrder ? guestEmail : null,
+        guest_name: isGuestOrder ? guestName : null,
+        guest_phone: isGuestOrder ? guestPhone : null,
         total_amount: payload.amountTotal,
         status: orderStatus,
         shipping_address: payload.shipping ?? null,

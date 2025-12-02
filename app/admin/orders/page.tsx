@@ -27,6 +27,7 @@ export default function AdminOrdersPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Detail View
@@ -41,6 +42,7 @@ export default function AdminOrdersPage() {
         limit,
         status: statusFilter,
         search: searchQuery,
+        date: dateFilter || undefined,
       });
       setOrders(result.orders);
       setTotal(result.total);
@@ -55,7 +57,7 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter]); 
+  }, [page, statusFilter, dateFilter]); 
   // Note: searchQuery is excluded from auto-fetch to prevent fetch on every keystroke if we typed it directly. 
   // We will trigger search manually or debounced. But here I bound it to state.
   // If I want to search on Enter, I should have a separate "appliedSearch" state.
@@ -105,6 +107,17 @@ export default function AdminOrdersPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleKeyDown}
           />
+        </div>
+        <div className="w-full sm:w-auto">
+           <Input
+             type="date"
+             value={dateFilter}
+             onChange={(e) => {
+               setDateFilter(e.target.value);
+               setPage(1);
+             }}
+             className="w-full sm:w-[160px]"
+           />
         </div>
         <Select
           value={statusFilter}

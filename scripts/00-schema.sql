@@ -154,13 +154,19 @@ CREATE TABLE IF NOT EXISTS cart_items (
 -- Create orders table
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  guest_email TEXT,
+  guest_name TEXT,
+  guest_phone TEXT,
   total_amount NUMERIC(12, 2) NOT NULL,
   status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'
   shipping_address JSONB,
   billing_address JSONB,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT orders_user_or_guest CHECK (
+    user_id IS NOT NULL OR (guest_email IS NOT NULL AND length(trim(guest_email)) > 0)
+  )
 );
 
 -- Create order_items table
@@ -230,6 +236,11 @@ CREATE POLICY "Users can delete own cart" ON cart_items FOR DELETE USING (auth.u
 
 CREATE POLICY "Users can read own orders" ON orders FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own orders" ON orders FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Guests can insert orders" ON orders
+  FOR INSERT
+  WITH CHECK (
+    auth.uid() IS NULL AND user_id IS NULL AND guest_email IS NOT NULL AND length(trim(guest_email)) > 0
+  );
 
 CREATE POLICY "Users can read own order items" ON order_items FOR SELECT USING (
   order_id IN (SELECT id FROM orders WHERE user_id = auth.uid())
@@ -247,5 +258,6 @@ CREATE INDEX idx_product_supplier_mapping_supplier_id ON product_supplier_mappin
 CREATE INDEX idx_vehicle_compatibility_vehicle_id ON vehicle_product_compatibility(vehicle_id);
 CREATE INDEX idx_cart_items_user_id ON cart_items(user_id);
 CREATE INDEX idx_orders_user_id ON orders(user_id);
+CREATE INDEX idx_orders_guest_email ON orders(guest_email);
 CREATE INDEX idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX idx_order_payments_order_id ON order_payments(order_id);

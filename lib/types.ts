@@ -124,11 +124,24 @@ export interface CartItem {
   updated_at: string;
 }
 
+export type OrderLifecycleStatus =
+  | 'pending'
+  | 'paid'
+  | 'processing'
+  | 'shipped'
+  | 'cancelled'
+  | 'refunded'
+  | 'confirmed' // legacy alias for 'paid'
+  | 'delivered'; // legacy alias for 'shipped'
+
 export interface Order {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  guest_email?: string | null;
+  guest_name?: string | null;
+  guest_phone?: string | null;
   total_amount: number;
-  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  status: OrderLifecycleStatus;
   shipping_address: Record<string, any> | null;
   billing_address: Record<string, any> | null;
   created_at: string;
@@ -154,4 +167,37 @@ export interface OrderPayment {
   transaction_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SearchSuggestionItem {
+  text: string;
+  type: 'term' | 'popular';
+  source?: 'product' | 'category' | 'popular';
+}
+
+export interface SearchCategorySuggestion {
+  id: string;
+  name: string;
+}
+
+export interface SearchVehicleSuggestion {
+  id: string;
+  name: string;
+  brand?: string | null;
+}
+
+export interface SearchProductSuggestion {
+  id: string;
+  name: string;
+  sku?: string | null;
+  price?: number | null;
+  image_url?: string | null;
+}
+
+export interface SearchSuggestionsResponse {
+  query: string;
+  suggestions: SearchSuggestionItem[];
+  categories: SearchCategorySuggestion[];
+  vehicles: SearchVehicleSuggestion[];
+  products: SearchProductSuggestion[];
 }

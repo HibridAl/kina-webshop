@@ -189,11 +189,13 @@ export async function getAdminOrdersAction({
   limit = 20,
   status,
   search,
+  date,
 }: {
   page?: number;
   limit?: number;
   status?: string;
   search?: string;
+  date?: string;
 }): Promise<{ orders: AdminOrder[]; total: number }> {
   const supabase = getServiceSupabase();
   const start = (page - 1) * limit;
@@ -205,6 +207,14 @@ export async function getAdminOrdersAction({
 
   if (status && status !== 'all') {
     query = query.eq('status', status);
+  }
+
+  if (date) {
+    // Filter by specific date (YYYY-MM-DD)
+    // We assume date is in 'YYYY-MM-DD' format
+    const startOfDay = `${date}T00:00:00.000Z`;
+    const endOfDay = `${date}T23:59:59.999Z`;
+    query = query.gte('created_at', startOfDay).lte('created_at', endOfDay);
   }
 
   if (search) {

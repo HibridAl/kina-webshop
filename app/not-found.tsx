@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
@@ -6,7 +7,9 @@ import { Footer } from '@/components/footer';
 export default function NotFound() {
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
+      <Suspense fallback={<div className="h-16 bg-background border-b border-border" />}>
+        <Header />
+      </Suspense>
       <main className="flex-1 flex items-center justify-center py-20">
         <div className="text-center space-y-6">
           <div>

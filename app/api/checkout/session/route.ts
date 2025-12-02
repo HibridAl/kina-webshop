@@ -15,6 +15,12 @@ import {
 import { getServiceSupabase } from '@/lib/supabase-server';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
+type GuestCheckoutPayload = {
+  email: string;
+  name?: string;
+  phone?: string;
+};
+
 function mapLineItem(
   stripe: Stripe,
   currency: string,
@@ -42,7 +48,23 @@ function buildMetadata(payload: Record<string, any>) {
   }, {});
 }
 
-async function requireUser(request: NextRequest): Promise<{ user: SupabaseUser } | { response: NextResponse }> {
+function normalizeGuestPayload(raw: unknown): GuestCheckoutPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Record<string, unknown>;
+  const email = typeof value.email === 'string' ? value.email.trim() : '';
+  if (!email) return null;
+  const guest: GuestCheckoutPayload = { email };
+  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  const phone = typeof value.phone === 'string' ? value.phone.trim() : '';
+  if (name) guest.name = name;
+  if (phone) guest.phone = phone;
+  return guest;
+}
+
+async function requireUser(
+  request: NextRequest,
+  options?: { optional?: boolean }
+): Promise<{ user: SupabaseUser | null } | { response: NextResponse }> {
   let client;
   try {
     client = getServiceSupabase();
@@ -55,6 +77,9 @@ async function requireUser(request: NextRequest): Promise<{ user: SupabaseUser }
 
   const header = request.headers.get('authorization');
   if (!header || !header.startsWith('Bearer ')) {
+    if (options?.optional) {
+      return { user: null };
+    }
     return { response: NextResponse.json({ error: 'Authorization required.' }, { status: 401 }) };
   }
 
@@ -79,15 +104,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 
-  const authResult = await requireUser(request);
-  if ('response' in authResult) {
-    return authResult.response;
-  }
-  const authenticatedUser = authResult.user;
-
   try {
     const body = await request.json();
-    const { items, shipping, billing, currency = 'usd', shippingMethodId } = body ?? {};
+    const { items, shipping, billing, currency = 'usd', shippingMethodId, guest } = body ?? {};
+
+    const guestDetails = normalizeGuestPayload(guest);
+
+    const authResult = await requireUser(request, { optional: Boolean(guestDetails) });
+    if ('response' in authResult) {
+      return authResult.response;
+    }
+    const authenticatedUser = authResult.user;
+
+    if (!authenticatedUser && !guestDetails) {
+      return NextResponse.json({ error: 'Please sign in or continue as a guest with an email.' }, { status: 401 });
+    }
 
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
@@ -134,7 +165,8 @@ export async function POST(request: NextRequest) {
     const origin = request.headers.get('origin') ?? new URL(request.url).origin;
 
     const metadata = buildMetadata({
-      user_id: authenticatedUser.id,
+      user_id: authenticatedUser?.id ?? undefined,
+      guest: guestDetails ?? undefined,
       items: resolvedItems.map((item) => ({ productId: item.productId, quantity: item.quantity })),
       shipping,
       billing,
@@ -155,7 +187,7 @@ export async function POST(request: NextRequest) {
       currency: normalizedCurrency,
       success_url: `${origin}/checkout?status=success`,
       cancel_url: `${origin}/checkout?status=cancelled`,
-      customer_email: shipping?.email ?? undefined,
+      customer_email: shipping?.email ?? guestDetails?.email ?? undefined,
       metadata,
     });
 

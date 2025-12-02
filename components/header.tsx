@@ -1,19 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { ShoppingCart, Search, Menu, Sparkles, ShieldCheck, Headphones, ChevronRight, X } from 'lucide-react';
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { OemSearchBar } from '@/components/oem-search-bar';
-import { useAuth } from '@/hooks/use-auth';
-import { getBrowserClient } from '@/lib/supabase';
 import { LanguageSelector } from '@/components/language-selector';
 import { LocalizedText } from '@/components/ui/localized-text';
 import { useLocale } from '@/hooks/use-locale';
+import { SearchAutocomplete } from '@/components/search-autocomplete';
+import { HeaderAuth, MobileAuth } from '@/components/header-auth';
 
 type LocalizedString = {
   hu: string;
@@ -76,25 +74,10 @@ const badgeCopy = [
 export function Header() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const { user, profile, loading: authLoading } = useAuth();
   const { locale } = useLocale();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [signingOut, setSigningOut] = useState(false);
 
-  const currentPath = useMemo(() => {
-    const query = searchParams?.toString();
-    if (query) {
-      return `${pathname}?${query}`;
-    }
-    return pathname;
-  }, [pathname, searchParams]);
-
-  const authHrefSuffix = encodeURIComponent(currentPath);
-  const loginHref = `/auth/login?next=${authHrefSuffix}`;
-  const registerHref = `/auth/register?next=${authHrefSuffix}`;
   const searchPlaceholder =
     locale === 'hu'
       ? 'Termékek, SKU-k vagy járműkulcsszavak keresése'
@@ -105,14 +88,6 @@ export function Header() {
       ? 'Ugorjon azonnal termékekhez, OEM keresésekhez vagy járművekhez.'
       : 'Instantly jump to products, OEM lookups, or vehicles.';
   const oemBlockTitle = locale === 'hu' ? 'OEM vagy SKU keresés' : 'OEM or SKU search';
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = searchQuery.trim();
-    if (!trimmed) return;
-    router.push(`/products?search=${encodeURIComponent(trimmed)}`);
-    setCommandOpen(false);
-  };
 
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
@@ -129,23 +104,6 @@ export function Header() {
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
   }, []);
-
-  const handleSignOut = async () => {
-    if (signingOut) return;
-    setSigningOut(true);
-    try {
-      const client = getBrowserClient();
-      await client.auth.signOut();
-      router.refresh();
-      setMobileMenuOpen(false);
-    } catch (error) {
-      console.error('Sign out failed', error);
-    } finally {
-      setSigningOut(false);
-    }
-  };
-
-  const userInitial = (profile?.email ?? user?.email ?? 'A').charAt(0).toUpperCase();
 
   return (
     <header className="sticky top-0 z-50 w-full">
@@ -211,76 +169,9 @@ export function Header() {
               </Button>
 
               <div className="hidden md:flex items-center gap-2">
-                {authLoading ? (
-                  <div className="h-9 w-24 animate-pulse rounded-full bg-muted" />
-                ) : user ? (
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <button className="flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-2 py-1 text-sm shadow-sm transition hover:border-border">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                          {userInitial}
-                        </span>
-                        <span className="hidden text-left leading-tight md:block">
-                          <span className="block text-xs text-muted-foreground">
-                            {profile?.role === 'admin' ? 'Admin' : 'Account'}
-                          </span>
-                          <span className="block max-w-[140px] truncate text-sm font-medium">
-                            {profile?.email ?? user.email}
-                          </span>
-                        </span>
-                      </button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Content align="end" sideOffset={8} className="w-60 rounded-2xl border border-border/60 bg-popover p-2 shadow-2xl">
-                      <DropdownMenu.Label className="px-2 py-1 text-xs text-muted-foreground">
-                        <LocalizedText hu="Bejelentkezve mint " en="Signed in as " />
-                        {user.email}
-                      </DropdownMenu.Label>
-                      <DropdownMenu.Separator className="my-1 h-px bg-border/70" />
-                      <DropdownMenu.Item asChild className="cursor-pointer rounded-xl px-2 py-2 text-sm hover:bg-muted/60">
-                        <Link href="/account">
-                          <LocalizedText hu="Fiók" en="Account" />
-                        </Link>
-                      </DropdownMenu.Item>
-                      <DropdownMenu.Item asChild className="cursor-pointer rounded-xl px-2 py-2 text-sm hover:bg-muted/60">
-                        <Link href="/orders">
-                          <LocalizedText hu="Rendelések" en="Orders" />
-                        </Link>
-                      </DropdownMenu.Item>
-                      <DropdownMenu.Item asChild className="cursor-pointer rounded-xl px-2 py-2 text-sm hover:bg-muted/60">
-                        <Link href="/cart">
-                          <LocalizedText hu="Kosár" en="Cart" />
-                        </Link>
-                      </DropdownMenu.Item>
-                      <DropdownMenu.Separator className="my-1 h-px bg-border/70" />
-                      <DropdownMenu.Item
-                        className="cursor-pointer rounded-xl px-2 py-2 text-sm text-destructive hover:bg-destructive/10"
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          handleSignOut();
-                        }}
-                      >
-                        {signingOut ? (
-                          <LocalizedText hu="Kijelentkezés…" en="Signing out…" />
-                        ) : (
-                          <LocalizedText hu="Kijelentkezés" en="Sign out" />
-                        )}
-                      </DropdownMenu.Item>
-                    </DropdownMenu.Content>
-                  </DropdownMenu.Root>
-                ) : (
-                  <div className="hidden items-center gap-2 md:flex">
-                    <Button variant="ghost" size="sm" className="text-sm" asChild>
-                      <Link href={loginHref}>
-                        <LocalizedText hu="Bejelentkezés" en="Sign in" />
-                      </Link>
-                    </Button>
-                    <Button size="sm" className="rounded-full bg-primary text-primary-foreground" asChild>
-                      <Link href={registerHref}>
-                        <LocalizedText hu="Fiók létrehozása" en="Create account" />
-                      </Link>
-                    </Button>
-                  </div>
-                )}
+                <Suspense fallback={<div className="h-9 w-24 animate-pulse rounded-full bg-muted" />}>
+                  <HeaderAuth />
+                </Suspense>
               </div>
 
               <Button
@@ -330,40 +221,9 @@ export function Header() {
             ))}
           </nav>
           <div className="mt-4 flex flex-col gap-2">
-            {user ? (
-              <>
-                <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
-                  <Link href="/account">
-                    <LocalizedText hu="Fiók" en="Account" />
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
-                  <Link href="/orders">
-                    <LocalizedText hu="Rendelések" en="Orders" />
-                  </Link>
-                </Button>
-                <Button variant="destructive" onClick={handleSignOut} disabled={signingOut}>
-                  {signingOut ? (
-                    <LocalizedText hu="Kijelentkezés…" en="Signing out…" />
-                  ) : (
-                    <LocalizedText hu="Kijelentkezés" en="Sign out" />
-                  )}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button asChild variant="outline" onClick={() => setMobileMenuOpen(false)}>
-                  <Link href={loginHref}>
-                    <LocalizedText hu="Bejelentkezés" en="Sign in" />
-                  </Link>
-                </Button>
-                <Button className="bg-primary" asChild onClick={() => setMobileMenuOpen(false)}>
-                  <Link href={registerHref}>
-                    <LocalizedText hu="Fiók létrehozása" en="Create account" />
-                  </Link>
-                </Button>
-              </>
-            )}
+            <Suspense fallback={<div className="h-20 animate-pulse rounded-md bg-muted" />}>
+              <MobileAuth onClose={() => setMobileMenuOpen(false)} />
+            </Suspense>
           </div>
           <div className="mt-6 space-y-3 rounded-2xl border border-border/70 p-4 text-sm">
             {quickActions.map((item) => (
@@ -397,16 +257,17 @@ export function Header() {
               </Button>
             </div>
 
-            <form onSubmit={handleSearchSubmit} className="space-y-4">
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+            <div className="space-y-4">
+              <SearchAutocomplete
                 placeholder={searchPlaceholder}
-                leadingIcon={<Search className="h-4 w-4" />}
+                autoFocus
+                onClose={() => setCommandOpen(false)}
               />
               <div className="rounded-2xl border border-dashed border-border/70 p-4">
                 <p className="text-xs uppercase text-muted-foreground">{oemBlockTitle}</p>
-                <OemSearchBar className="mt-3" />
+                <Suspense fallback={<div className="h-10 animate-pulse rounded-md bg-muted" />}>
+                  <OemSearchBar className="mt-3" />
+                </Suspense>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 {quickActions.map((item) => (
@@ -420,7 +281,7 @@ export function Header() {
                   </Link>
                 ))}
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

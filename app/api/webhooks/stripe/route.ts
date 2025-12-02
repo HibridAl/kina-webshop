@@ -69,9 +69,20 @@ export async function POST(request: NextRequest) {
         shippingMethodId?: string;
         shippingMethodCode?: string;
       }>(metadata.totals);
+      const guestMeta = safeJsonParse<{ email?: string; name?: string; phone?: string }>(metadata.guest);
       const resolvedItems = await resolveCheckoutItems(items);
 
-      if (items.length && metadata.user_id) {
+      const guestDetails = guestMeta?.email
+        ? {
+            email: guestMeta.email,
+            name: guestMeta.name ?? null,
+            phone: guestMeta.phone ?? null,
+          }
+        : null;
+
+      const hasCheckoutIdentity = Boolean(metadata.user_id || guestDetails?.email || session.customer_details?.email);
+
+      if (items.length && hasCheckoutIdentity) {
         let receiptUrl: string | null = null;
         let paymentMethod: string | null = null;
 
@@ -86,7 +97,8 @@ export async function POST(request: NextRequest) {
         }
 
         await fulfillStripeOrder({
-          userId: metadata.user_id,
+          userId: metadata.user_id ?? null,
+          guest: metadata.user_id ? null : guestDetails,
           items: resolvedItems,
           amountTotal: (session.amount_total ?? 0) / 100,
           currency: session.currency ?? undefined,
@@ -99,7 +111,7 @@ export async function POST(request: NextRequest) {
           paymentMethod,
           metadata,
           receiptUrl,
-          customerEmail: session.customer_details?.email ?? session.customer_email ?? null,
+          customerEmail: session.customer_details?.email ?? session.customer_email ?? guestDetails?.email ?? null,
           totals: totalsMeta ?? undefined,
         });
       }
