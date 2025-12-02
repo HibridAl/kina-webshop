@@ -20,6 +20,8 @@ import type { Brand, Model, Product, Vehicle } from '@/lib/types';
 import type { ProductSortOption } from '@/lib/db';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/hooks/use-locale';
+import { Filter, X } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 const PAGE_SIZE = 12;
 
@@ -86,6 +88,7 @@ export function ProductsPageClient() {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<ProductSortOption>('newest');
   const [filters, setFilters] = useState(() => createDefaultFilters());
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Initialize filters from URL query on first render or when params change
   useEffect(() => {
@@ -265,6 +268,7 @@ export function ProductsPageClient() {
     setFilters(createDefaultFilters());
     setPage(1);
     router.push(params.toString() ? `?${params.toString()}` : '?');
+    setMobileFiltersOpen(false);
   };
 
   const handleSortChange = (value: ProductSortOption) => {
@@ -286,18 +290,78 @@ export function ProductsPageClient() {
   const totalPages = Math.max(1, Math.ceil((total || products.length) / PAGE_SIZE));
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[320px,minmax(0,1fr)]">
-      <div className="lg:sticky lg:top-28">
-        <ProductFilters
-          onFilterChange={handleFilterChange}
-          oemValue={filters.oem}
-          onResetFilters={handleFiltersReset}
-        />
+    <>
+      <div className="mb-6 flex flex-wrap items-center gap-3 lg:hidden">
+        <Button
+          variant="outline"
+          className="flex-1 gap-2 rounded-full border-border/70"
+          onClick={() => setMobileFiltersOpen(true)}
+        >
+          <Filter className="h-4 w-4" />
+          {locale === 'hu' ? 'Szűrők megnyitása' : 'Open filters'}
+        </Button>
+        <Button variant="ghost" className="rounded-full" onClick={handleFiltersReset}>
+          {locale === 'hu' ? 'Összes törlése' : 'Clear all'}
+        </Button>
       </div>
 
-      <div className="space-y-6">
-        {filters.vehicleId && (
-          <div className="rounded-[28px] border border-border/70 bg-card/80 p-5 shadow-sm">
+      <Dialog open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+        <DialogContent className="max-w-3xl gap-0 rounded-[32px] border border-border/70 p-0">
+          <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+                {locale === 'hu' ? 'Katalógus szűrése' : 'Refine catalog'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {locale === 'hu'
+                  ? 'Szűkítse a keresést és alkalmazza az OEM szűrőket.'
+                  : 'Adjust filters and apply OEM or inventory constraints.'}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMobileFiltersOpen(false)}
+              className="gap-2 rounded-full"
+            >
+              <X className="h-4 w-4" />
+              {locale === 'hu' ? 'Bezárás' : 'Close'}
+            </Button>
+          </div>
+          <div className="max-h-[70vh] overflow-y-auto px-2 py-4">
+            <ProductFilters
+              onFilterChange={handleFilterChange}
+              oemValue={filters.oem}
+              onResetFilters={handleFiltersReset}
+              className="border-0 bg-transparent shadow-none"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-border/70 px-6 py-4">
+            <Button variant="ghost" className="rounded-full" onClick={handleFiltersReset}>
+              {locale === 'hu' ? 'Szűrők visszaállítása' : 'Reset filters'}
+            </Button>
+            <Button className="rounded-full" onClick={() => setMobileFiltersOpen(false)}>
+              {locale === 'hu' ? 'Kész' : 'Done'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex flex-col gap-8 lg:flex-row">
+        <div className="hidden lg:block lg:w-80 lg:flex-shrink-0">
+          <div className="sticky top-28">
+            <ProductFilters
+              onFilterChange={handleFilterChange}
+              oemValue={filters.oem}
+              onResetFilters={handleFiltersReset}
+              className="lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-6">
+          {filters.vehicleId && (
+            <div className="rounded-[28px] border border-border/70 bg-card/80 p-5 shadow-sm">
             {vehicleContextLoading && (
               <p className="text-sm text-muted-foreground">
                 {locale === 'hu' ? 'Járműadatok betöltése…' : 'Loading vehicle details…'}
@@ -380,7 +444,8 @@ export function ProductsPageClient() {
             isLoading={loading}
           />
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

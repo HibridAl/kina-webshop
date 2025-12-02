@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import type { Category, Brand } from '@/lib/types';
 import { Filter, Search } from 'lucide-react';
 import { useLocale } from '@/hooks/use-locale';
+import { cn } from '@/lib/utils';
 
 interface ProductFiltersProps {
   onFilterChange: (filters: {
@@ -19,9 +20,10 @@ interface ProductFiltersProps {
   }) => void;
   oemValue?: string;
   onResetFilters?: () => void;
+  className?: string;
 }
 
-export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: ProductFiltersProps) {
+export function ProductFilters({ onFilterChange, oemValue, onResetFilters, className }: ProductFiltersProps) {
   const { locale } = useLocale();
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -75,7 +77,12 @@ export function ProductFilters({ onFilterChange, oemValue, onResetFilters }: Pro
   ].filter(Boolean) as { label: string; type: 'category' | 'brand' | 'stock' }[];
 
   return (
-    <aside className="space-y-6 rounded-[32px] border border-border/70 bg-card/80 p-6 shadow-lg">
+    <aside
+      className={cn(
+        'space-y-6 rounded-[32px] border border-border/70 bg-card p-6 shadow-lg',
+        className
+      )}
+    >
       <div className="flex items-center gap-2 text-sm font-semibold">
         <Filter className="h-4 w-4" />
         {locale === 'hu' ? 'Katalógus szűrése' : 'Refine catalog'}
