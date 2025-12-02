@@ -1,46 +1,25 @@
-export type OilSelectorDataset = {
-  [make: string]: OilSelectorMakeEntry;
-};
+import { getBrowserClient } from './supabase';
 
-export type OilSelectorMakeEntry = {
-  [modelKey: string]: OilSelectorModelEntry;
-};
-
-export type OilSelectorModelEntry = {
-  [hash: string]: OilSelectorVehicleRecord;
-};
-
-export interface OilSelectorVehicleRecord {
-  vehicle: {
-    make: string;
-    model: string;
-    type: string;
-    hash: string;
-  };
-  results: {
-    [systemName: string]: OilSelectorSystem;
-  };
+export interface OilRecommendation {
+  id: string;
+  vehicle_id: string;
+  manufacturer_label: string;
+  viscosity: string;
+  specification_code: string | null;
+  product_sku: string | null;
 }
 
-export interface OilSelectorSystem {
-  capacities?: string[];
-  uses?: {
-    [usageName: string]: {
-      interval?: string[];
-      products?: {
-        [productCode: string]: OilSelectorProduct;
-      };
-    };
-  };
+export async function getOilRecommendations(vehicleId: string) {
+  try {
+    const client = getBrowserClient();
+    const { data, error } = await client
+      .from('vehicle_oil_recommendations')
+      .select('*')
+      .eq('vehicle_id', vehicleId);
+    if (error) throw error;
+    return (data as OilRecommendation[]) ?? [];
+  } catch (error) {
+    console.error('Failed to load oil recommendations:', error);
+    return [];
+  }
 }
-
-export interface OilSelectorProduct {
-  name: string;
-  url: string;
-  image: string;
-}
-
-export const CHINESE_MAKES = ['MG', 'BYD', 'Omoda', 'Geely', 'Haval'] as const;
-export type ChineseMake = (typeof CHINESE_MAKES)[number];
-
-

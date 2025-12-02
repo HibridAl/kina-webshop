@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import type { Product } from '@/lib/types';
 import { useCart } from '@/hooks/use-cart';
 import { LocalizedText } from '@/components/ui/localized-text';
+import { WishlistButton } from '@/components/wishlist-button';
 
 interface ProductCardProps {
   product: Product;
@@ -34,6 +35,9 @@ export function ProductCard({ product }: ProductCardProps) {
           <img
             src={imageSrc}
             alt={product.name}
+            width="480"
+            height="320"
+            loading="lazy"
             onError={(e) => {
               if (e.currentTarget.src !== placeholder) {
                 e.currentTarget.src = placeholder;
@@ -41,11 +45,14 @@ export function ProductCard({ product }: ProductCardProps) {
             }}
             className="h-48 w-full rounded-2xl object-cover transition duration-500 group-hover:scale-105"
           />
-          <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-semibold text-foreground">
+          <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur-sm">
             <LocalizedText hu="Készleten:" en="In stock:" /> {product.stock_quantity}
           </div>
-          <div className="absolute right-4 top-4">
-            <Badge variant="accent" className="rounded-full text-[10px]">
+          <div className="absolute right-4 top-4 z-10">
+            <WishlistButton productId={product.id} className="bg-background/80 hover:bg-background backdrop-blur-sm rounded-full" />
+          </div>
+          <div className="absolute right-4 bottom-4">
+            <Badge variant="accent" className="rounded-full text-[10px] shadow-sm">
               <LocalizedText hu="Azonnal szállítható" en="Ready to ship" />
             </Badge>
           </div>

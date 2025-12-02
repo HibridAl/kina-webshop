@@ -1,76 +1,61 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import type { ProductSortOption } from '@/lib/db';
-import { useLocale } from '@/hooks/use-locale';
+import { Trash2, Download, DollarSign, Archive } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { LocalizedText } from '@/components/ui/localized-text';
 
 interface ProductsToolbarProps {
-  page: number;
-  pageSize: number;
-  total: number;
-  sort: ProductSortOption;
-  onSortChange: (value: ProductSortOption) => void;
+  selectedCount: number;
+  onDelete: () => void;
+  onExport: () => void;
+  onUpdatePrice: () => void;
+  onUpdateStatus: () => void;
 }
 
-export function ProductsToolbar({ page, pageSize, total, sort, onSortChange }: ProductsToolbarProps) {
-  const { locale } = useLocale();
-  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const end = total === 0 ? 0 : Math.min(total, page * pageSize);
-  const liveInventoryLabel = locale === 'hu' ? 'Élő készlet' : 'Live inventory';
-  const supabaseLabel = locale === 'hu' ? 'Supabase szinkron' : 'Supabase synced';
-  const sortLabel = locale === 'hu' ? 'Rendezés' : 'Sort';
-  const placeholder = locale === 'hu' ? 'Rendezés kiválasztása' : 'Select sort';
+export function ProductsToolbar({
+  selectedCount,
+  onDelete,
+  onExport,
+  onUpdatePrice,
+  onUpdateStatus,
+}: ProductsToolbarProps) {
+  if (selectedCount === 0) return null;
 
   return (
-    <div className="mb-6 flex flex-col gap-4 rounded-[28px] border border-border/70 bg-card/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-sm font-semibold text-foreground">
-          {locale === 'hu' ? 'Találatok ' : 'Showing '}
-          {start}–{end} {locale === 'hu' ? ' / ' : ' of '}
-          {total}{' '}
-          {locale === 'hu'
-            ? total === 1
-              ? 'termék'
-              : 'termék'
-            : total === 1
-              ? 'product'
-              : 'products'}
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Badge variant="outline" className="rounded-full text-[11px] uppercase tracking-[0.3em]">
-            {liveInventoryLabel}
-          </Badge>
-          <Badge variant="accent" className="rounded-full text-[11px]">
-            {supabaseLabel}
-          </Badge>
-        </div>
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border border-border bg-popover px-4 py-2 shadow-xl animate-in slide-in-from-bottom-10">
+      <div className="mr-2 flex items-center gap-2 border-r border-border pr-4 text-sm font-medium">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
+          {selectedCount}
+        </span>
+        <span className="hidden sm:inline">Selected</span>
       </div>
+      
+      <Button variant="ghost" size="sm" onClick={onUpdatePrice} className="h-8">
+        <DollarSign className="mr-2 h-3.5 w-3.5" />
+        Price
+      </Button>
+      
+      <Button variant="ghost" size="sm" onClick={onUpdateStatus} className="h-8">
+        <Archive className="mr-2 h-3.5 w-3.5" />
+        Status
+      </Button>
 
-      <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center">
-        <span className="text-muted-foreground">{sortLabel}</span>
-        <Select value={sort} onValueChange={(value) => onSortChange(value as ProductSortOption)}>
-          <SelectTrigger className="w-[200px] rounded-2xl border-border/70">
-            <SelectValue placeholder={placeholder} />
-          </SelectTrigger>
-          <SelectContent side="bottom" className="rounded-2xl border-border/70">
-            <SelectItem value="newest">{locale === 'hu' ? 'Legújabb' : 'Newest'}</SelectItem>
-            <SelectItem value="popularity">{locale === 'hu' ? 'Népszerűség' : 'Popularity'}</SelectItem>
-            <SelectItem value="price-asc">
-              {locale === 'hu' ? 'Ár: növekvő' : 'Price: Low to High'}
-            </SelectItem>
-            <SelectItem value="price-desc">
-              {locale === 'hu' ? 'Ár: csökkenő' : 'Price: High to Low'}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Button variant="ghost" size="sm" onClick={onExport} className="h-8">
+        <Download className="mr-2 h-3.5 w-3.5" />
+        Export
+      </Button>
+
+      <div className="mx-1 h-4 w-px bg-border" />
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onDelete}
+        className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+      >
+        <Trash2 className="mr-2 h-3.5 w-3.5" />
+        Delete
+      </Button>
     </div>
   );
 }

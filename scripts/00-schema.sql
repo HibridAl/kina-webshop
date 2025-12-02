@@ -127,11 +127,79 @@ CREATE TABLE IF NOT EXISTS vehicle_product_compatibility (
   UNIQUE(vehicle_id, product_id)
 );
 
+CREATE TABLE IF NOT EXISTS vehicle_oil_recommendations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vehicle_id UUID NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  manufacturer_label TEXT NOT NULL,
+  viscosity VARCHAR(32) NOT NULL,
+  specification_code TEXT,
+  temperature_range TEXT,
+  notes TEXT,
+  product_sku VARCHAR(100) REFERENCES products(sku),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT vehicle_oil_rec_unique UNIQUE(vehicle_id, viscosity, specification_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vehicle_oil_vehicle ON vehicle_oil_recommendations(vehicle_id);
+
+CREATE TABLE IF NOT EXISTS addresses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(20) NOT NULL DEFAULT 'personal',
+  label TEXT,
+  first_name TEXT,
+  last_name TEXT,
+  company_name TEXT,
+  vat_id TEXT,
+  address_line1 TEXT NOT NULL,
+  address_line2 TEXT,
+  city TEXT NOT NULL,
+  state TEXT,
+  postal_code TEXT NOT NULL,
+  country TEXT NOT NULL,
+  phone TEXT,
+  is_default_shipping BOOLEAN NOT NULL DEFAULT FALSE,
+  is_default_billing BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_addresses_default_shipping
+  ON addresses(user_id)
+  WHERE is_default_shipping;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_addresses_default_billing
+  ON addresses(user_id)
+  WHERE is_default_billing;
+
+CREATE INDEX IF NOT EXISTS idx_addresses_user ON addresses(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS wishlists (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT DEFAULT 'My Wishlist',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT wishlists_user_unique UNIQUE (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS wishlist_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wishlist_id UUID NOT NULL REFERENCES wishlists(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT wishlist_items_unique UNIQUE (wishlist_id, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wishlist_items_wishlist ON wishlist_items(wishlist_id);
+CREATE INDEX IF NOT EXISTS idx_wishlist_items_product ON wishlist_items(product_id);
+
 -- Create users table (for auth)
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email VARCHAR(255) UNIQUE,
-  role VARCHAR(50) DEFAULT 'customer', -- 'customer', 'b2b', 'admin'
+  role VARCHAR(50) DEFAULT 'user', -- 'user', 'admin', 'support', 'viewer'
   company_name VARCHAR(255),
   is_b2b BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT NOW(),
@@ -197,6 +265,28 @@ CREATE TABLE IF NOT EXISTS order_payments (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- My Garage saved vehicles
+CREATE TABLE IF NOT EXISTS my_vehicles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  vehicle_id UUID NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  label TEXT,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT my_vehicles_owner_vehicle_unique UNIQUE (user_id, vehicle_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_my_vehicles_default_user
+  ON my_vehicles(user_id)
+  WHERE is_default;
+
+CREATE INDEX IF NOT EXISTS idx_my_vehicles_user_created
+  ON my_vehicles(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_my_vehicles_vehicle
+  ON my_vehicles(vehicle_id);
+
 -- Enable Row Level Security
 ALTER TABLE brands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE models ENABLE ROW LEVEL SECURITY;
@@ -213,6 +303,7 @@ ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE my_vehicles ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies: Public read access to brands, models, vehicles, categories, products
 CREATE POLICY "Brands are readable by all" ON brands FOR SELECT USING (true);
@@ -245,6 +336,48 @@ CREATE POLICY "Guests can insert orders" ON orders
 CREATE POLICY "Users can read own order items" ON order_items FOR SELECT USING (
   order_id IN (SELECT id FROM orders WHERE user_id = auth.uid())
 );
+
+CREATE POLICY "Users read own garage" ON my_vehicles
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own garage" ON my_vehicles
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update own garage" ON my_vehicles
+  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users delete own garage" ON my_vehicles
+  FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users read own addresses" ON addresses
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own addresses" ON addresses
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update own addresses" ON addresses
+  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users delete own addresses" ON addresses
+  FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users read own wishlists" ON wishlists
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users manage own wishlists" ON wishlists
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users read own wishlist items" ON wishlist_items
+  FOR SELECT USING (
+    wishlist_id IN (SELECT id FROM wishlists WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Users manage own wishlist items" ON wishlist_items
+  FOR ALL USING (
+    wishlist_id IN (SELECT id FROM wishlists WHERE user_id = auth.uid())
+  ) WITH CHECK (
+    wishlist_id IN (SELECT id FROM wishlists WHERE user_id = auth.uid())
+  );
 
 -- Suppliers table: Only admins can modify
 CREATE POLICY "Suppliers readable by all" ON suppliers FOR SELECT USING (true);

@@ -141,6 +141,9 @@ export function HeroSection() {
                 src="/placeholder.svg?height=420&width=560&text=AutoHub+Command+Center"
                 alt="AutoHub operations dashboard"
                 className="h-64 w-full rounded-2xl border border-border/80 object-cover"
+                width="560"
+                height="420"
+                loading="eager"
               />
               <div className="mt-6 grid gap-3 text-sm">
                 <div className="flex items-center justify-between rounded-2xl bg-background/70 px-4 py-3">

@@ -14,6 +14,8 @@ import {
 } from '@/lib/db';
 import type { Brand, Model, Product, Vehicle } from '@/lib/types';
 import { LocalizedText } from '@/components/ui/localized-text';
+import { VehicleSaveButton } from '@/components/vehicle-save-button';
+import { VehicleOilSelector } from '@/components/vehicle-oil-selector';
 
 interface VehicleDetailProps {
   vehicleId: string;
@@ -123,6 +125,7 @@ export function VehicleDetail({ vehicleId }: VehicleDetailProps) {
               <LocalizedText hu="Kompatibilis alkatrészek megtekintése" en="Shop compatible parts" />
             </Link>
           </Button>
+          <VehicleSaveButton vehicleId={vehicle.id} size="sm" />
           {model && (
             <Button asChild size="sm" variant="outline">
               <Link href={`/brands/${model.brand_id}/models/${model.id}`}>
@@ -143,6 +146,8 @@ export function VehicleDetail({ vehicleId }: VehicleDetailProps) {
           ))}
         </div>
       )}
+
+      <VehicleOilSelector vehicleId={vehicle.id} />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-4">

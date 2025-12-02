@@ -8,12 +8,16 @@ import type { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { deleteProductAction } from '@/app/admin/actions';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ProductsToolbar } from '@/components/products-toolbar';
+import { toast } from 'sonner';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -47,8 +51,45 @@ export default function AdminProductsPage() {
     });
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(products.map((p) => p.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    const next = new Set(selectedIds);
+    if (checked) {
+      next.add(id);
+    } else {
+      next.delete(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const handleBulkDelete = () => {
+    if (!confirm(`Delete ${selectedIds.size} products?`)) return;
+    toast.info('Bulk delete coming soon (T-26.2)');
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkExport = () => {
+    toast.success(`Exporting ${selectedIds.size} products...`);
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkPrice = () => {
+    toast.info('Bulk price update coming soon (T-26.2)');
+  };
+
+  const handleBulkStatus = () => {
+    toast.info('Bulk status update coming soon (T-26.2)');
+  };
+
   return (
-    <div className="p-8">
+    <div className="p-8 pb-24">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-4xl font-bold">Products</h1>
         <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -70,6 +111,13 @@ export default function AdminProductsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted">
+                <th className="px-6 py-3 w-[50px]">
+                  <Checkbox
+                    checked={products.length > 0 && selectedIds.size === products.length}
+                    onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
+                    aria-label="Select all"
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">SKU</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold">Price</th>
@@ -81,6 +129,9 @@ export default function AdminProductsPage() {
               {loading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i} className="border-b border-border">
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-4 w-4" />
+                    </td>
                     <td className="px-6 py-4">
                       <Skeleton className="h-4 w-20" />
                     </td>
@@ -100,13 +151,20 @@ export default function AdminProductsPage() {
                 ))
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                     No products found. Create one to get started.
                   </td>
                 </tr>
               ) : (
                 products.map((product) => (
                   <tr key={product.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <Checkbox
+                        checked={selectedIds.has(product.id)}
+                        onCheckedChange={(checked) => handleSelectOne(product.id, checked as boolean)}
+                        aria-label={`Select ${product.name}`}
+                      />
+                    </td>
                     <td className="px-6 py-4 text-sm font-mono">{product.sku}</td>
                     <td className="px-6 py-4 text-sm font-medium">{product.name}</td>
                     <td className="px-6 py-4 text-sm">${product.price.toFixed(2)}</td>
@@ -145,6 +203,14 @@ export default function AdminProductsPage() {
           </table>
         </div>
       </div>
+
+      <ProductsToolbar
+        selectedCount={selectedIds.size}
+        onDelete={handleBulkDelete}
+        onExport={handleBulkExport}
+        onUpdatePrice={handleBulkPrice}
+        onUpdateStatus={handleBulkStatus}
+      />
     </div>
   );
 }

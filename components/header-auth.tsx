@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Car, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
 import { getBrowserClient } from '@/lib/supabase';
@@ -66,12 +67,51 @@ export function HeaderAuth() {
             </span>
           </button>
         </DropdownMenu.Trigger>
-        <DropdownMenu.Content align="end" sideOffset={8} className="w-60 rounded-2xl border border-border/60 bg-popover p-2 shadow-2xl">
+        <DropdownMenu.Content align="end" sideOffset={8} className="w-64 rounded-2xl border border-border/60 bg-popover p-2 shadow-2xl">
           <DropdownMenu.Label className="px-2 py-1 text-xs text-muted-foreground">
             <LocalizedText hu="Bejelentkezve mint " en="Signed in as " />
             {user.email}
           </DropdownMenu.Label>
+          
           <DropdownMenu.Separator className="my-1 h-px bg-border/70" />
+          
+          {/* My Garage Section (Mock) */}
+          <div className="px-2 py-1.5">
+            <div className="flex items-center justify-between mb-1 text-xs font-medium text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Car className="h-3 w-3" />
+                <LocalizedText hu="Garázsom" en="My Garage" />
+              </span>
+              <Link href="/account/garage" className="hover:text-primary text-[10px]">
+                <LocalizedText hu="Kezelés" en="Manage" />
+              </Link>
+            </div>
+            <div className="space-y-1">
+              {/* Mock Item 1: Default */}
+              <DropdownMenu.Item asChild className="group cursor-pointer rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60 flex items-center justify-between">
+                <Link href="/products?vehicleId=mock-1">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-xs">2023 MG 4 Electric</span>
+                    <span className="text-[10px] text-muted-foreground">Standard Range • RWD</span>
+                  </div>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+              </DropdownMenu.Item>
+              {/* Mock Item 2 */}
+              <DropdownMenu.Item asChild className="group cursor-pointer rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60 flex items-center justify-between">
+                <Link href="/products?vehicleId=mock-2">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-xs">2022 BYD Atto 3</span>
+                    <span className="text-[10px] text-muted-foreground">Extended Range</span>
+                  </div>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+              </DropdownMenu.Item>
+            </div>
+          </div>
+
+          <DropdownMenu.Separator className="my-1 h-px bg-border/70" />
+
           <DropdownMenu.Item asChild className="cursor-pointer rounded-xl px-2 py-2 text-sm hover:bg-muted/60">
             <Link href="/account">
               <LocalizedText hu="Fiók" en="Account" />

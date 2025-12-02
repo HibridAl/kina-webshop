@@ -175,6 +175,56 @@ export interface SearchSuggestionItem {
   source?: 'product' | 'category' | 'popular';
 }
 
+export interface SavedVehicle {
+  id: string;
+  user_id: string;
+  vehicle_id: string;
+  label: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  vehicles?: Vehicle | null;
+}
+
+export interface Address {
+  id: string;
+  user_id: string;
+  type: 'personal' | 'business' | string;
+  label: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string | null;
+  vat_id: string | null;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  state: string | null;
+  postal_code: string;
+  country: string;
+  phone: string | null;
+  is_default_shipping: boolean;
+  is_default_billing: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Wishlist {
+  id: string;
+  user_id: string;
+  name: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: WishlistItem[];
+}
+
+export interface WishlistItem {
+  id: string;
+  wishlist_id: string;
+  product_id: string;
+  created_at: string;
+  products?: Product | null;
+}
+
 export interface SearchCategorySuggestion {
   id: string;
   name: string;

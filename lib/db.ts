@@ -23,6 +23,10 @@ import type {
   OrderPayment,
   CartItem,
   OrderLifecycleStatus,
+  SavedVehicle,
+  Address,
+  Wishlist,
+  WishlistItem,
 } from './types';
 
 export type ProductSortOption = 'popularity' | 'newest' | 'price-asc' | 'price-desc';
@@ -1144,6 +1148,310 @@ interface StripeOrderPayload {
     shippingMethodId?: string;
     shippingMethodCode?: string;
   };
+}
+
+export async function reorderPreviousOrder(userId: string, orderId: string) {
+  try {
+    if (!canUseSupabase()) return { success: false, missingProducts: [], added: 0 };
+
+    const client = getBrowserClient();
+    const { data: order, error: orderError } = await client.from('orders').select('id').eq('id', orderId).eq('user_id', userId).single();
+    if (orderError || !order) {
+      throw orderError ?? new Error('Order not found');
+    }
+
+    const { data: items, error: itemsError } = await client
+      .from('order_items')
+      .select('product_id, quantity')
+      .eq('order_id', orderId);
+    if (itemsError) throw itemsError;
+
+    let added = 0;
+    const missingProducts: string[] = [];
+
+    for (const item of items ?? []) {
+      const productId = item.product_id;
+      try {
+        await addToCart(userId, productId, item.quantity);
+        added += 1;
+      } catch (error) {
+        console.error('Reorder addToCart failed:', error);
+        missingProducts.push(productId);
+      }
+    }
+
+    return { success: true, missingProducts, added };
+  } catch (error) {
+    console.error('Error running reorder helper:', error);
+    return { success: false, missingProducts: [], added: 0 };
+  }
+}
+
+export async function getUserAddresses(userId: string) {
+  try {
+    if (!canUseSupabase()) return [];
+
+    const client = getBrowserClient();
+    const { data, error } = await client
+      .from('addresses')
+      .select('*')
+      .eq('user_id', userId)
+      .order('is_default_shipping', { ascending: false })
+      .order('is_default_billing', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data as Address[]) ?? [];
+  } catch (error) {
+    console.error('Error fetching addresses:', error);
+    return [];
+  }
+}
+
+export async function createAddress(userId: string, payload: Partial<Address>) {
+  try {
+    if (!canUseSupabase()) return null;
+    const client = getBrowserClient();
+    const { data, error } = await client
+      .from('addresses')
+      .insert({ ...payload, user_id: userId })
+      .select()
+      .single();
+    if (error) throw error;
+    return data as Address;
+  } catch (error) {
+    console.error('Error creating address:', error);
+    return null;
+  }
+}
+
+export async function updateAddress(addressId: string, userId: string, payload: Partial<Address>) {
+  try {
+    if (!canUseSupabase()) return null;
+    const client = getBrowserClient();
+    const { data, error } = await client
+      .from('addresses')
+      .update(payload)
+      .eq('id', addressId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as Address;
+  } catch (error) {
+    console.error('Error updating address:', error);
+    return null;
+  }
+}
+
+export async function deleteAddress(addressId: string, userId: string) {
+  try {
+    if (!canUseSupabase()) return;
+    const client = getBrowserClient();
+    const { error } = await client
+      .from('addresses')
+      .delete()
+      .eq('id', addressId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting address:', error);
+  }
+}
+
+export async function setDefaultAddress(
+  userId: string,
+  addressId: string,
+  options?: { type: 'shipping' | 'billing' | 'both' }
+) {
+  try {
+    if (!canUseSupabase()) return null;
+    const client = getBrowserClient();
+    const target = options?.type ?? 'both';
+
+    if (target === 'shipping' || target === 'both') {
+      await client
+        .from('addresses')
+        .update({ is_default_shipping: false })
+        .eq('user_id', userId)
+        .eq('is_default_shipping', true);
+    }
+    if (target === 'billing' || target === 'both') {
+      await client
+        .from('addresses')
+        .update({ is_default_billing: false })
+        .eq('user_id', userId)
+        .eq('is_default_billing', true);
+    }
+
+    const updates: Record<string, boolean> = {};
+    if (target === 'shipping' || target === 'both') updates.is_default_shipping = true;
+    if (target === 'billing' || target === 'both') updates.is_default_billing = true;
+
+    const { data, error } = await client
+      .from('addresses')
+      .update(updates)
+      .eq('id', addressId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as Address;
+  } catch (error) {
+    console.error('Error setting default address:', error);
+    return null;
+  }
+}
+
+async function ensureWishlist(userId: string) {
+  const client = getBrowserClient();
+  const { data, error } = await client
+    .from('wishlists')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error && error.code !== 'PGRST116') throw error;
+  if (data) return data as Wishlist;
+  const { data: insert, error: insertError } = await client
+    .from('wishlists')
+    .insert({ user_id: userId })
+    .select()
+    .single();
+  if (insertError) throw insertError;
+  return insert as Wishlist;
+}
+
+export async function getWishlist(userId: string) {
+  try {
+    if (!canUseSupabase()) return null;
+    const client = getBrowserClient();
+    const wishlist = await ensureWishlist(userId);
+    const { data: items, error } = await client
+      .from('wishlist_items')
+      .select('*, products(*)')
+      .eq('wishlist_id', wishlist.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { ...wishlist, items: (items as WishlistItem[]) ?? [] } as Wishlist;
+  } catch (error) {
+    console.error('Error fetching wishlist:', error);
+    return null;
+  }
+}
+
+export async function addProductToWishlist(userId: string, productId: string) {
+  try {
+    if (!canUseSupabase()) return null;
+    const client = getBrowserClient();
+    const wishlist = await ensureWishlist(userId);
+    const { data, error } = await client
+      .from('wishlist_items')
+      .upsert({ wishlist_id: wishlist.id, product_id: productId }, { onConflict: 'wishlist_id,product_id' })
+      .select()
+      .single();
+    if (error) throw error;
+    return data as WishlistItem;
+  } catch (error) {
+    console.error('Error adding to wishlist:', error);
+    return null;
+  }
+}
+
+export async function removeProductFromWishlist(userId: string, productId: string) {
+  try {
+    if (!canUseSupabase()) return;
+    const client = getBrowserClient();
+    const wishlist = await ensureWishlist(userId);
+    const { error } = await client
+      .from('wishlist_items')
+      .delete()
+      .eq('wishlist_id', wishlist.id)
+      .eq('product_id', productId);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error removing from wishlist:', error);
+  }
+}
+
+export async function getMyVehicles(userId: string) {
+  try {
+    if (!canUseSupabase()) return [];
+    const client = getBrowserClient();
+    const { data, error } = await client
+      .from('my_vehicles')
+      .select('*, vehicles(*)')
+      .eq('user_id', userId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data as SavedVehicle[]) ?? [];
+  } catch (error) {
+    console.error('Error fetching saved vehicles:', error);
+    return [];
+  }
+}
+
+export async function addVehicleToGarage(
+  userId: string,
+  vehicleId: string,
+  options?: { label?: string | null; makeDefault?: boolean }
+) {
+  try {
+    if (!canUseSupabase()) return null;
+    const client = getBrowserClient();
+    const payload: Record<string, any> = {
+      user_id: userId,
+      vehicle_id: vehicleId,
+      label: options?.label ?? null,
+    };
+    if (options?.makeDefault) {
+      await client.from('my_vehicles').update({ is_default: false }).eq('user_id', userId).eq('is_default', true);
+      payload.is_default = true;
+    }
+    const { data, error } = await client.from('my_vehicles').upsert(payload, { onConflict: 'user_id,vehicle_id' }).select().single();
+    if (error) throw error;
+    return data as SavedVehicle;
+  } catch (error) {
+    console.error('Error adding vehicle to garage:', error);
+    return null;
+  }
+}
+
+export async function removeVehicleFromGarage(userId: string, vehicleId: string) {
+  try {
+    if (!canUseSupabase()) return;
+    const client = getBrowserClient();
+    const { error } = await client
+      .from('my_vehicles')
+      .delete()
+      .eq('user_id', userId)
+      .eq('vehicle_id', vehicleId);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error removing vehicle from garage:', error);
+  }
+}
+
+export async function setDefaultVehicle(userId: string, vehicleId: string) {
+  try {
+    if (!canUseSupabase()) return null;
+    const client = getBrowserClient();
+    const { error: clearError } = await client
+      .from('my_vehicles')
+      .update({ is_default: false })
+      .eq('user_id', userId)
+      .eq('is_default', true);
+    if (clearError) throw clearError;
+    const { data, error } = await client
+      .from('my_vehicles')
+      .upsert({ user_id: userId, vehicle_id: vehicleId, is_default: true }, { onConflict: 'user_id,vehicle_id' })
+      .select()
+      .single();
+    if (error) throw error;
+    return data as SavedVehicle;
+  } catch (error) {
+    console.error('Error setting default vehicle:', error);
+    return null;
+  }
 }
 
 export async function fulfillStripeOrder(payload: StripeOrderPayload) {

@@ -8,6 +8,7 @@ import type { Supplier } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { deleteSupplierAction, saveSupplierAction } from '@/app/admin/actions';
+import { SupplierImportHistory } from '@/components/supplier-import-history';
 
 export default function AdminSuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -121,6 +122,8 @@ export default function AdminSuppliersPage() {
           New Supplier
         </Button>
       </div>
+
+      <SupplierImportHistory history={[]} />
 
       {feedback && (
         <div className="mb-6 rounded-lg border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive">

@@ -8,6 +8,7 @@ import { useCart } from '@/hooks/use-cart';
 import type { Product, Supplier } from '@/lib/types';
 import { ShoppingCart, Zap, Package, TrendingUp } from 'lucide-react';
 import { LocalizedText } from '@/components/ui/localized-text';
+import { WishlistButton } from '@/components/wishlist-button';
 
 interface ProductDetailPageProps {
   productId: string;
@@ -151,15 +152,18 @@ export function ProductDetailPage({ productId, initialProduct }: ProductDetailPa
                   </div>
                 </div>
 
-                <Button
-                  onClick={handleAddToCart}
-                  size="lg"
-                  disabled={product.stock_quantity === 0}
-                  className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-                >
-                  <ShoppingCart className="w-5 h-5 mr-2" />
-                  <LocalizedText hu="Kosárba helyezés" en="Add to Cart" />
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={handleAddToCart}
+                    size="lg"
+                    disabled={product.stock_quantity === 0}
+                    className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground"
+                  >
+                    <ShoppingCart className="w-5 h-5 mr-2" />
+                    <LocalizedText hu="Kosárba helyezés" en="Add to Cart" />
+                  </Button>
+                  <WishlistButton productId={product.id} variant="outline" size="lg" withLabel />
+                </div>
               </div>
 
               {/* Product Features */}
